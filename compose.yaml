@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: mockman
+      POSTGRES_PASSWORD: mockman
+      POSTGRES_DB: mockman
+    ports:
+      - '127.0.0.1:54329:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mockman']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  postgres_data:

@@ -1,0 +1,14 @@
+{
+  "name": "mockman",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "postinstall": "npm --prefix frontend ci",
+    "dev": "docker compose up -d --wait && node scripts/dev.mjs",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build && go -C backend build -o ../mockman ./cmd/mockman"
+  }
+}

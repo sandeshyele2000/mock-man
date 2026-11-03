@@ -1,0 +1,525 @@
+openapi: 3.1.0
+info:
+  title: Mockman admin API
+  version: 0.1.0
+  description: >-
+    Same-origin local admin API. Mutations require Content-Type: application/json and
+    X-Mockman-Admin: 1. Mock listener preserves application paths; see README for runtime headers.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /api/config:
+    get:
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin origin or mutation header rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin origin or mutation header rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Stale configuration version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Config'
+  /api/logs:
+    get:
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Log'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin origin or mutation header rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+        - in: query
+          name: project
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: environment
+          required: true
+          schema:
+            type: string
+  /api/reset:
+    post:
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                properties:
+                  ok:
+                    type: boolean
+                additionalProperties: false
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin origin or mutation header rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Reset'
+  /api/try:
+    post:
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TryResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Admin origin or mutation header rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Storage unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TryRequest'
+components:
+  schemas:
+    Config:
+      type: object
+      required:
+        - version
+        - projects
+      properties:
+        version:
+          type: integer
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+      additionalProperties: false
+    Project:
+      type: object
+      required:
+        - id
+        - name
+        - environments
+        - features
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        environments:
+          type: array
+          items:
+            type: string
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/Feature'
+      additionalProperties: false
+    Feature:
+      type: object
+      required:
+        - id
+        - name
+        - endpoints
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        endpoints:
+          type: array
+          items:
+            $ref: '#/components/schemas/Endpoint'
+      additionalProperties: false
+    Endpoint:
+      type: object
+      required:
+        - id
+        - name
+        - method
+        - path
+        - enabled
+        - responses
+        - scenarios
+        - active
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        method:
+          type: string
+          enum:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - HEAD
+            - OPTIONS
+        path:
+          type: string
+        enabled:
+          type: boolean
+        responses:
+          type: array
+          items:
+            $ref: '#/components/schemas/Response'
+        scenarios:
+          type: array
+          items:
+            $ref: '#/components/schemas/Scenario'
+        active:
+          type: object
+          additionalProperties:
+            type: string
+      additionalProperties: false
+    Response:
+      type: object
+      required:
+        - id
+        - name
+        - status
+        - headers
+        - body
+        - delayMs
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: integer
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        delayMs:
+          type: integer
+      additionalProperties: false
+    Condition:
+      type: object
+      required:
+        - source
+        - key
+        - value
+      properties:
+        source:
+          type: string
+          enum:
+            - query
+            - header
+            - body
+        key:
+          type: string
+        value:
+          type: string
+      additionalProperties: false
+    Scenario:
+      type: object
+      required:
+        - id
+        - name
+        - revision
+        - behavior
+        - count
+        - responseIds
+        - exhaustion
+        - priority
+        - conditions
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        revision:
+          type: string
+        behavior:
+          type: string
+          enum:
+            - always
+            - failFirst
+            - failAfter
+            - sequence
+        count:
+          type: integer
+        responseIds:
+          type: array
+          items:
+            type: string
+        exhaustion:
+          type: string
+          enum:
+            - repeat
+            - loop
+        priority:
+          type: integer
+        conditions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Condition'
+      additionalProperties: false
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+      additionalProperties: false
+    LogDetail:
+      type: object
+      required:
+        - method
+        - path
+        - endpoint
+        - scenario
+        - revision
+        - session
+        - attempt
+        - status
+        - delayMs
+        - reason
+      properties:
+        method:
+          type: string
+        path:
+          type: string
+        endpoint:
+          type: string
+        scenario:
+          type: string
+        revision:
+          type: string
+        session:
+          type: string
+        attempt:
+          type: integer
+        status:
+          type: integer
+        delayMs:
+          type: integer
+        reason:
+          type: string
+      additionalProperties: false
+    Log:
+      type: object
+      required:
+        - id
+        - createdAt
+        - detail
+      properties:
+        id:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        detail:
+          $ref: '#/components/schemas/LogDetail'
+      additionalProperties: false
+    Reset:
+      type: object
+      required:
+        - project
+        - environment
+        - session
+        - endpoint
+      properties:
+        project:
+          type: string
+        environment:
+          type: string
+        session:
+          type: string
+        endpoint:
+          type: string
+      additionalProperties: false
+    TryRequest:
+      type: object
+      required:
+        - project
+        - environment
+        - session
+        - scenario
+        - method
+        - path
+        - headers
+        - body
+      properties:
+        project:
+          type: string
+        environment:
+          type: string
+        session:
+          type: string
+        scenario:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body:
+          type: string
+      additionalProperties: false
+    TryResult:
+      type: object
+      required:
+        - status
+        - headers
+        - body
+        - elapsedMs
+      properties:
+        status:
+          type: integer
+        headers:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+        body:
+          type: string
+        elapsedMs:
+          type: integer
+      additionalProperties: false
