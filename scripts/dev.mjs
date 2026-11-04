@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { serverConfig } from "./config.mjs";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -70,14 +71,9 @@ process.on("SIGINT", () => stop(0));
 process.on("SIGTERM", () => stop(0));
 
 console.log(
-  `Dashboard: http://127.0.0.1:5173 | Backend: http://${process.env.ADMIN_ADDR || "127.0.0.1:8080"} | Mock API: http://${process.env.MOCK_ADDR || "127.0.0.1:9090"}`,
+  `Dashboard: ${serverConfig.dashboardOrigin} | Backend: ${serverConfig.adminOrigin} | Mock API: ${serverConfig.mockOrigin}`,
 );
 start("Backend", "go", ["-C", "backend", "run", "./cmd/mockman"]);
-start(
-  "Frontend",
-  process.execPath,
-  [vite, "--host", "127.0.0.1", "--port", "5173", "--strictPort"],
-  {
-    cwd: fileURLToPath(new URL("../frontend/", import.meta.url)),
-  },
-);
+start("Frontend", process.execPath, [vite], {
+  cwd: fileURLToPath(new URL("../frontend/", import.meta.url)),
+});

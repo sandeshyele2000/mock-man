@@ -88,3 +88,25 @@ func TestValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestPathValidation(t *testing.T) {
+	for _, path := range []string{"/users", "/v1/agreements/acceptances"} {
+		t.Run("accept "+path, func(t *testing.T) {
+			config := storage.Sample()
+			config.Projects[0].Features[0].Endpoints[0].Path = path
+			if err := engine.Validate(config); err != nil {
+				t.Fatalf("valid path %q rejected: %v", path, err)
+			}
+		})
+	}
+
+	for _, path := range []string{"/users?active=true", "/users#details", "/users\\admin", "/users\radmin", "/users\nadmin"} {
+		t.Run("reject "+path, func(t *testing.T) {
+			config := storage.Sample()
+			config.Projects[0].Features[0].Endpoints[0].Path = path
+			if err := engine.Validate(config); err == nil {
+				t.Fatalf("invalid path %q accepted", path)
+			}
+		})
+	}
+}

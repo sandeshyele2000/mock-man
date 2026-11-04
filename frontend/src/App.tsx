@@ -1,3 +1,4 @@
+import { ADMIN_HOST, MOCK_HOST, MOCK_PORT, MOCK_SERVER_URL } from "./config";
 import {
   Modal,
   EntityForm,
@@ -190,11 +191,11 @@ export default function App() {
   const curl =
     e && p
       ? [
-        `curl -i -X ${e.method} ${quote(`http://127.0.0.1:9090${encodeURI(e.path)}`)}`,
-        `  -H ${quote(`X-Mock-Project: ${p.id}`)}`,
-        `  -H ${quote(`X-Mock-Environment: ${env}`)}`,
-        `  -H ${quote(`X-Mock-Session: ${session}`)}`,
-      ].join(" \\\n")
+          `curl -i -X ${e.method} ${quote(`${MOCK_SERVER_URL.replace(/\/$/, "")}${encodeURI(e.path)}`)}`,
+          `  -H ${quote(`X-Mock-Project: ${p.id}`)}`,
+          `  -H ${quote(`X-Mock-Environment: ${env}`)}`,
+          `  -H ${quote(`X-Mock-Session: ${session}`)}`,
+        ].join(" \\\n")
       : "";
   async function copyCurl() {
     try {
@@ -337,13 +338,8 @@ export default function App() {
           <div className="server-state">
             <span className="live-dot" />
             <span>Local workspace</span>
-            <span className="port">:9090</span>
+            <span className="port">:{MOCK_PORT}</span>
           </div>
-          <p>
-            Predictable APIs.
-            <br />
-            More productive development.
-          </p>
           <div className="version">
             <span>Mockman</span>
             <span>v0.1</span>
@@ -370,8 +366,6 @@ export default function App() {
                 <option key={v}>{v}</option>
               ))}
             </select>
-            <span className="divider" />
-            <span className="local-pill">LOCAL ONLY</span>
           </div>
         </header>
         <main>
@@ -385,7 +379,6 @@ export default function App() {
                 {f?.name || "Your next API starts here"}
                 <span className="heading-dot">.</span>
               </h1>
-              <p>Shape the response. Test every possibility.</p>
             </div>
             <div className="heading-actions">
               {f && (
@@ -533,7 +526,7 @@ export default function App() {
               <div className="list-footer">
                 <Server size={14} />
                 <span>
-                  Mock server <code>localhost:9090</code>
+                  Mock server <code>{MOCK_HOST}</code>
                 </span>
               </div>
             </section>
@@ -940,13 +933,13 @@ export default function App() {
                           <div>
                             <b>Two listeners, one workspace</b>
                             <p>
-                              Dashboard: 127.0.0.1:8080
+                              Admin API: {ADMIN_HOST}
                               <br />
-                              Mock API: 127.0.0.1:9090
+                              Mock API: {MOCK_HOST}
                             </p>
                             <p>
-                              Set MOCK_ADDR=0.0.0.0:9090 for a physical device.
-                              Use your computer’s LAN address. Keep real
+                              Set MOCK_ADDR=0.0.0.0:{MOCK_PORT} for a physical
+                              device. Use your computer’s LAN address. Keep real
                               credentials out of mock requests.
                             </p>
                           </div>
@@ -1030,13 +1023,6 @@ export default function App() {
               starting with a letter or number.
             </p>
           )}
-          <div className="page-footer">
-            <span>
-              <span className="live-dot" />
-              Your configuration stays in PostgreSQL.
-            </span>
-            <span>Made for the edge cases.</span>
-          </div>
         </main>
       </div>
       {notice && (

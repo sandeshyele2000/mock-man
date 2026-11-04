@@ -1,9 +1,10 @@
 import { test, expect } from "@playwright/test";
+import { serverConfig } from "../../scripts/config.mjs";
 test("create, edit, activate, try, inspect logs and reset a mock endpoint", async ({
   page,
   request,
 }) => {
-  const backendURL = "http://127.0.0.1:8080";
+  const backendURL = serverConfig.adminOrigin;
   const config = await (await request.get(`${backendURL}/api/config`)).json();
   const headers = {
     "X-Mockman-Admin": "1",

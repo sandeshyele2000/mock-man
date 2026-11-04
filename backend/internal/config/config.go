@@ -14,8 +14,8 @@ type Config struct {
 	DatabaseURL        string   `env:"DATABASE_URL" envDefault:"postgres://mockman:mockman@127.0.0.1:54329/mockman?sslmode=disable"`
 	AdminAddr          string   `env:"ADMIN_ADDR" envDefault:"127.0.0.1:8080"`
 	AdminOrigin        string   `env:"ADMIN_ORIGIN"`
-	DashboardOrigin    string   `env:"DASHBOARD_ORIGIN" envDefault:"http://127.0.0.1:5173"`
-	MockAddr           string   `env:"MOCK_ADDR" envDefault:"127.0.0.1:9090"`
+	DashboardOrigin    string   `env:"DASHBOARD_ORIGIN" envDefault:"http://localhost:5173"`
+	MockAddr           string   `env:"MOCK_ADDR" envDefault:"127.0.0.1:9091"`
 	MockAllowedOrigins []string `env:"MOCK_ALLOWED_ORIGINS" envSeparator:","`
 }
 

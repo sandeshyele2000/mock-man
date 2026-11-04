@@ -86,7 +86,7 @@ func validateEndpoint(endpoint Endpoint, seen, routes, environments map[string]b
 		return errors.New("endpoint needs response/scenario arrays (maximum 100 each), active selections and bounded name/path")
 	}
 	seen[endpoint.ID] = true
-	if !slices.Contains([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}, endpoint.Method) || !strings.HasPrefix(endpoint.Path, "/") || strings.ContainsAny(endpoint.Path, "?#\\r\\n") {
+	if !slices.Contains([]string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}, endpoint.Method) || !strings.HasPrefix(endpoint.Path, "/") || strings.ContainsAny(endpoint.Path, "?#\\\r\n") {
 		return errors.New("endpoint needs a supported method and absolute path without query")
 	}
 	route := endpoint.Method + " " + endpoint.Path

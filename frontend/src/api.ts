@@ -1,4 +1,5 @@
 import type { components, paths } from "./schema";
+import { API_BASE_URL } from "./config";
 export type Config = components["schemas"]["Config"];
 export type Project = components["schemas"]["Project"];
 export type Feature = components["schemas"]["Feature"];
@@ -14,8 +15,7 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const apiBase = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8080";
-  const r = await fetch(new URL(path, apiBase), {
+  const r = await fetch(new URL(path, API_BASE_URL), {
     method,
     headers: { "Content-Type": "application/json", "X-Mockman-Admin": "1" },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
