@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: mockman
       POSTGRES_PASSWORD: mockman
       POSTGRES_DB: mockman
-    ports:
-      - '127.0.0.1:54329:5432'
     volumes:
       - postgres_data:/var/lib/postgresql
     healthcheck:
@@ -14,5 +12,33 @@ services:
       interval: 2s
       timeout: 3s
       retries: 20
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      DATABASE_URL: postgres://mockman:mockman@db:5432/mockman?sslmode=disable
+      ADMIN_ADDR: 0.0.0.0:8080
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:-http://localhost:8080}
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://localhost:5173}
+      MOCK_ADDR: 0.0.0.0:9091
+      MOCK_ALLOWED_ORIGINS: ${MOCK_ALLOWED_ORIGINS:-}
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:8080:8080'
+      - '${BIND_ADDRESS:-127.0.0.1}:9091:9091'
+    depends_on:
+      db:
+        condition: service_healthy
+  dashboard:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: ${ADMIN_ORIGIN:-http://localhost:8080}
+        VITE_MOCK_URL: ${MOCK_ORIGIN:-http://localhost:9091}
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:5173:80'
+    depends_on:
+      - app
 volumes:
   postgres_data:

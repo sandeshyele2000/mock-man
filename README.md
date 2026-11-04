@@ -1,5 +1,26 @@
 # Mockman
 
+## Run with Docker Compose
+
+Install Docker with Compose, then run from the repository root:
+
+```sh
+docker compose up --build -d
+```
+
+Open the dashboard at <http://localhost:5173>. The admin API is available at
+<http://localhost:8080> and the mock API at <http://localhost:9091>. PostgreSQL
+data is stored in a named volume and the schema is initialized automatically.
+Stop the services with `docker compose down`; add `-v` only when you want to
+delete the stored database too.
+
+By default, the ports bind to localhost. To let other devices on your LAN use
+the app, set `BIND_ADDRESS=0.0.0.0` and set `ADMIN_ORIGIN`, `DASHBOARD_ORIGIN`,
+and `MOCK_ORIGIN` in `.env` to URLs using the host's LAN name or IP, then rebuild
+the dashboard with `docker compose up --build -d`. Set
+`MOCK_ALLOWED_ORIGINS` to the browser app origins that should call mock routes.
+The admin API has no user authentication, so keep it on a trusted network.
+
 ## Run both (development)
 
 ```sh
