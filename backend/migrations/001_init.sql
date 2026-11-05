@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS attempts (
  attempt bigint NOT NULL, touched_at timestamptz NOT NULL DEFAULT now(),
  PRIMARY KEY(project,environment,endpoint,revision,session)
 );
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS cursor text NOT NULL DEFAULT '';
+ALTER TABLE attempts ADD COLUMN IF NOT EXISTS last_response text NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS request_logs (
  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
  created_at timestamptz NOT NULL DEFAULT now(),

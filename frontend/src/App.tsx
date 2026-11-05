@@ -7,7 +7,7 @@ import {
   TryForm,
   behaviors,
 } from "./components/editors";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,6 +20,7 @@ import {
   Circle,
   Code2,
   Copy,
+  Download,
   Folder,
   Layers,
   Moon,
@@ -33,6 +34,7 @@ import {
   Settings2,
   Sun,
   Trash2,
+  Upload,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -77,6 +79,8 @@ export default function App() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const scenarioImportRef = useRef<HTMLInputElement>(null);
+  const featureImportRef = useRef<HTMLInputElement>(null);
   const c = config.data;
   const p = c?.projects.find((p) => p.id === projectID) || c?.projects[0];
   const f = p?.features.find((f) => f.id === featureID) || p?.features[0];
@@ -174,14 +178,325 @@ export default function App() {
       else e.responses[i] = v;
     });
   }
-  function saveScenario(v: Scenario) {
+  function saveScenario(v: Scenario, importedResponses: Response[] = []) {
     change((_, __, ___, e) => {
       if (!e) return;
+      const importedIDs = new Set(
+        importedResponses.map((response) => response.id),
+      );
+      e.responses = [
+        ...e.responses.filter((response) => !importedIDs.has(response.id)),
+        ...importedResponses,
+      ];
       const i = e.scenarios.findIndex((s) => s.id === v.id);
       if (i < 0) e.scenarios.push(v);
       else e.scenarios[i] = v;
       if (!e.active[env]) e.active[env] = v.id;
     });
+  }
+  function exportScenario(scenario: Scenario) {
+    const responseIDs = new Set([
+      ...scenario.responseIds,
+      ...(scenario.flow?.nodes.flatMap((node) =>
+        node.responseId ? [node.responseId] : [],
+      ) ?? []),
+    ]);
+    const bundle = {
+      format: "mockman-scenario",
+      version: 1,
+      scenario: { ...scenario, revision: "" },
+      responses: (e?.responses ?? []).filter(
+        (response) =>
+          scenario.behavior === "flow" || responseIDs.has(response.id),
+      ),
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${scenario.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "scenario"}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  function exportFeature(feature: Feature) {
+    const bundle = {
+      format: "mockman-feature",
+      version: 1,
+      feature,
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${feature.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "feature"}.mockman-feature.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  async function importFeature(file?: File) {
+    if (!file || !p) return;
+    try {
+      const bundle = JSON.parse(await file.text());
+      const feature = bundle?.feature as Feature | undefined;
+      if (
+        bundle?.format !== "mockman-feature" ||
+        bundle?.version !== 1 ||
+        !feature?.id ||
+        !feature.name ||
+        !Array.isArray(feature.endpoints)
+      ) {
+        throw new Error("This file is not a supported Mockman feature export.");
+      }
+      const createIDMap = (values: string[], label: string) => {
+        if (
+          values.some((value) => !value) ||
+          new Set(values).size !== values.length
+        ) {
+          throw new Error(
+            `The export contains missing or duplicate ${label} IDs.`,
+          );
+        }
+        return new Map(
+          values.map((value) => [value, crypto.randomUUID().slice(0, 8)]),
+        );
+      };
+      const requireMappedID = (
+        ids: Map<string, string>,
+        value: string,
+        label: string,
+      ) => {
+        const mapped = ids.get(value);
+        if (!mapped)
+          throw new Error(
+            `The export references an unknown ${label} ID: ${value}.`,
+          );
+        return mapped;
+      };
+      const endpointIDs = createIDMap(
+        feature.endpoints.map((endpoint) => endpoint.id),
+        "endpoint",
+      );
+      const importedFeature: Feature = {
+        ...feature,
+        id: crypto.randomUUID().slice(0, 8),
+        endpoints: feature.endpoints.map((endpoint) => {
+          const responseIDs = createIDMap(
+            endpoint.responses.map((response) => response.id),
+            "response",
+          );
+          const scenarioIDs = createIDMap(
+            endpoint.scenarios.map((scenario) => scenario.id),
+            "scenario",
+          );
+          return {
+            ...endpoint,
+            id: requireMappedID(endpointIDs, endpoint.id, "endpoint"),
+            responses: endpoint.responses.map((response) => ({
+              ...response,
+              id: requireMappedID(responseIDs, response.id, "response"),
+            })),
+            scenarios: endpoint.scenarios.map((scenario) => {
+              const nodeIDs = createIDMap(
+                scenario.flow?.nodes.map((node) => node.id) ?? [],
+                "flow node",
+              );
+              const connectionIDs = createIDMap(
+                scenario.flow?.connections.map((connection) => connection.id) ??
+                  [],
+                "flow connection",
+              );
+              return {
+                ...scenario,
+                id: requireMappedID(scenarioIDs, scenario.id, "scenario"),
+                revision: "",
+                responseIds: scenario.responseIds.map((id) =>
+                  requireMappedID(responseIDs, id, "response"),
+                ),
+                ...(scenario.flow
+                  ? {
+                      flow: {
+                        ...scenario.flow,
+                        startNodeId: requireMappedID(
+                          nodeIDs,
+                          scenario.flow.startNodeId,
+                          "flow node",
+                        ),
+                        nodes: scenario.flow.nodes.map((node) => ({
+                          ...node,
+                          id: requireMappedID(nodeIDs, node.id, "flow node"),
+                          ...(node.responseId
+                            ? {
+                                responseId: requireMappedID(
+                                  responseIDs,
+                                  node.responseId,
+                                  "response",
+                                ),
+                              }
+                            : {}),
+                          ...(node.code
+                            ? {
+                                code: [...responseIDs].reduce(
+                                  (code, [oldID, newID]) =>
+                                    code
+                                      .replaceAll(
+                                        JSON.stringify(oldID),
+                                        JSON.stringify(newID),
+                                      )
+                                      .replaceAll(`'${oldID}'`, `'${newID}'`),
+                                  node.code,
+                                ),
+                              }
+                            : {}),
+                        })),
+                        connections: scenario.flow.connections.map(
+                          (connection) => ({
+                            ...connection,
+                            id: requireMappedID(
+                              connectionIDs,
+                              connection.id,
+                              "flow connection",
+                            ),
+                            source: requireMappedID(
+                              nodeIDs,
+                              connection.source,
+                              "flow node",
+                            ),
+                            target: requireMappedID(
+                              nodeIDs,
+                              connection.target,
+                              "flow node",
+                            ),
+                          }),
+                        ),
+                      },
+                    }
+                  : {}),
+              };
+            }),
+            active: Object.fromEntries(
+              Object.entries(endpoint.active)
+                .filter(([environment]) => p.environments.includes(environment))
+                .map(([environment, scenarioID]) => [
+                  environment,
+                  requireMappedID(scenarioIDs, scenarioID, "scenario"),
+                ]),
+            ),
+          };
+        }),
+      };
+      change((_, project) => {
+        project.features.push(importedFeature);
+      });
+      setFeatureID(importedFeature.id);
+      setExpandedFeatureID(importedFeature.id);
+      setEndpointID("");
+      setNotice(`Imported feature “${importedFeature.name}”.`);
+      setError("");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not import this feature.",
+      );
+    } finally {
+      if (featureImportRef.current) featureImportRef.current.value = "";
+    }
+  }
+  async function importScenario(file?: File) {
+    if (!file || !e) return;
+    try {
+      const bundle = JSON.parse(await file.text());
+      const scenario = bundle?.scenario as Scenario | undefined;
+      const responses = bundle?.responses as Response[] | undefined;
+      if (
+        bundle?.format !== "mockman-scenario" ||
+        bundle?.version !== 1 ||
+        !scenario ||
+        (!Object.hasOwn(behaviors, scenario.behavior) &&
+          scenario.behavior !== "flow") ||
+        !Array.isArray(scenario.responseIds) ||
+        !Array.isArray(responses) ||
+        !Array.isArray(scenario.conditions) ||
+        (scenario.behavior === "flow" && !scenario.flow)
+      ) {
+        throw new Error(
+          "This file is not a supported Mockman scenario export.",
+        );
+      }
+      const ids = new Map<string, string>();
+      const importedResponses = responses.map((response) => {
+        if (
+          !response?.id ||
+          ids.has(response.id) ||
+          !response.name ||
+          !response.headers
+        ) {
+          throw new Error(
+            "The export contains an invalid or duplicate response.",
+          );
+        }
+        const importedID = crypto.randomUUID().slice(0, 8);
+        ids.set(response.id, importedID);
+        return { ...response, id: importedID };
+      });
+      const importedScenario: Scenario = {
+        ...scenario,
+        id: crypto.randomUUID().slice(0, 8),
+        revision: "",
+        responseIds: scenario.responseIds.map((responseID) => {
+          const mapped = ids.get(responseID);
+          if (!mapped)
+            throw new Error(`The export is missing response ${responseID}.`);
+          return mapped;
+        }),
+        ...(scenario.flow
+          ? {
+              flow: {
+                ...scenario.flow,
+                nodes: scenario.flow.nodes.map((node) => {
+                  if (node.type === "javascript" && node.code) {
+                    const code = [...ids].reduce(
+                      (current, [original, mapped]) =>
+                        current
+                          .replaceAll(
+                            JSON.stringify(original),
+                            JSON.stringify(mapped),
+                          )
+                          .replaceAll(`'${original}'`, `'${mapped}'`),
+                      node.code,
+                    );
+                    return { ...node, code };
+                  }
+                  if (node.type !== "response" || !node.responseId) return node;
+                  const mapped = ids.get(node.responseId);
+                  if (!mapped)
+                    throw new Error(
+                      `The export is missing response ${node.responseId}.`,
+                    );
+                  return { ...node, responseId: mapped };
+                }),
+              },
+            }
+          : {}),
+      };
+      change((_, __, ___, endpoint) => {
+        if (!endpoint) return;
+        endpoint.responses.push(...importedResponses);
+        endpoint.scenarios.push(importedScenario);
+        if (!endpoint.active[env]) endpoint.active[env] = importedScenario.id;
+      });
+      setNotice(`Imported scenario “${importedScenario.name}”.`);
+      setError("");
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "Could not import this scenario.",
+      );
+    } finally {
+      if (scenarioImportRef.current) scenarioImportRef.current.value = "";
+    }
   }
   const active = e?.scenarios.find((s) => s.id === e.active[env]);
   function nextResponseIndex(scenario: Scenario) {
@@ -450,6 +765,34 @@ export default function App() {
               </h1>
             </div>
             <div className="heading-actions">
+              <input
+                ref={featureImportRef}
+                hidden
+                type="file"
+                accept="application/json,.json"
+                aria-label="Import feature JSON"
+                onChange={(event) =>
+                  void importFeature(event.target.files?.[0])
+                }
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Export feature"
+                disabled={!f}
+                onClick={() => f && exportFeature(f)}
+              >
+                <Download size={15} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Import feature"
+                disabled={!p}
+                onClick={() => featureImportRef.current?.click()}
+              >
+                <Upload size={15} />
+              </Button>
               {f && (
                 <>
                   <Button
@@ -776,15 +1119,35 @@ export default function App() {
                             <h3>Response behavior</h3>
                             <p>Choose what happens on each attempt.</p>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!e.responses.length}
-                            onClick={() => setModal({ kind: "scenario" })}
-                          >
-                            <Plus size={14} />
-                            Add scenario
-                          </Button>
+                          <div className="scenario-import-actions">
+                            <input
+                              ref={scenarioImportRef}
+                              hidden
+                              type="file"
+                              accept="application/json,.json"
+                              aria-label="Import scenario JSON"
+                              onChange={(event) =>
+                                void importScenario(event.target.files?.[0])
+                              }
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => scenarioImportRef.current?.click()}
+                            >
+                              <Upload size={14} />
+                              Import
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!e.responses.length}
+                              onClick={() => setModal({ kind: "scenario" })}
+                            >
+                              <Plus size={14} />
+                              Add scenario
+                            </Button>
+                          </div>
                         </div>
                         {e.scenarios.map((s) => (
                           <article
@@ -805,7 +1168,18 @@ export default function App() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
+                                  aria-label={`Export scenario ${s.name}`}
+                                  onClick={() => exportScenario(s)}
+                                >
+                                  <Download size={14} />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
                                   aria-label={`Edit scenario ${s.name}`}
+                                  disabled={
+                                    !Object.hasOwn(behaviors, s.behavior)
+                                  }
                                   onClick={() =>
                                     setModal({ kind: "scenario", value: s })
                                   }
@@ -839,7 +1213,9 @@ export default function App() {
                               </div>
                             </div>
                             <p>
-                              {behaviors[s.behavior]}
+                              {behaviors[
+                                s.behavior as keyof typeof behaviors
+                              ] ?? "Visual flow (view only)"}
                               {["failFirst", "failAfter"].includes(
                                 s.behavior,
                               ) && <b> · N = {s.count}</b>}
@@ -850,6 +1226,7 @@ export default function App() {
                               {s.responseIds.map((rid, i) => {
                                 const isNext =
                                   s.id === active?.id &&
+                                  s.behavior !== "flow" &&
                                   i === nextResponseIndex(s);
                                 return (
                                   <span

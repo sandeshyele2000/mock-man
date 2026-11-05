@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
 @theme {
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -626,6 +627,11 @@ main {
   gap: 10px;
   margin-bottom: 20px;
 }
+.scenario-import-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .section-heading h3 {
   font-size: 12px;
   font-weight: 550;
@@ -979,6 +985,9 @@ dialog {
   background: #fff;
   box-shadow: 0 30px 100px #192d2340;
 }
+dialog:has(.scenario-flow) {
+  width: min(1100px, 96vw);
+}
 dialog::backdrop {
   background: #182c2480;
   backdrop-filter: blur(3px);
@@ -1129,6 +1138,257 @@ form footer > span {
 }
 .sequence {
   margin-bottom: 18px;
+}
+.scenario-flow {
+  margin: 8px 0 24px;
+  min-width: 0;
+}
+.flow-toolbar,
+.flow-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.flow-toolbar {
+  margin-bottom: 12px;
+}
+.flow-toolbar strong {
+  color: #40533a;
+  font-size: 14px;
+}
+.flow-toolbar p,
+.flow-help {
+  margin: 5px 0 0;
+  color: #85917f;
+  font-size: 12px;
+}
+.flow-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid #dce5d7;
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: #52634b;
+  font: inherit;
+  font-size: 12px;
+}
+.flow-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.flow-actions .flow-add-button {
+  border-color: #2e7658;
+  background: #2e7658;
+  color: #fff;
+}
+.flow-actions .flow-loop-button.is-active {
+  border-color: #b7d2b6;
+  background: #edf6ec;
+  color: #366846;
+}
+.flow-viewport {
+  height: min(60vh, 580px);
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid #e3e9df;
+  border-radius: 10px;
+  background-color: #f8faf6;
+  background-image: radial-gradient(#dce5d8 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.flow-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  isolation: isolate;
+}
+.xy-node {
+  position: relative;
+  min-width: 188px;
+  border: 1px solid #dce5d8;
+  border-radius: 10px;
+  background: #fff;
+  color: #435741;
+  box-shadow: 0 8px 24px #2d463016;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.xy-node-start,
+.xy-node-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 70px;
+  padding: 12px;
+}
+.xy-node-start strong,
+.xy-node-end strong {
+  display: block;
+  color: #435741;
+  font-size: 12px;
+}
+.xy-node-start small,
+.xy-node-end small,
+.xy-node-response > small {
+  display: block;
+  margin-top: 6px;
+  color: #879486;
+  font-size: 12px;
+}
+.xy-node-response {
+  width: 230px;
+  padding: 12px;
+}
+.xy-node-javascript {
+  width: 330px;
+  padding: 12px;
+}
+.xy-node-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 9px;
+  color: #60785d;
+}
+.xy-node-heading strong {
+  flex: 1;
+  color: #435741;
+  font-size: 12px;
+}
+.xy-node .select-trigger {
+  width: 100%;
+  min-height: 36px;
+  font-size: 12px;
+}
+.xy-code-label,
+.xy-output-title {
+  display: block;
+  margin: 8px 0 5px;
+  color: #66765f;
+  font-size: 12px;
+  font-weight: 600;
+}
+.xy-code {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 1px solid #dce5d8;
+  border-radius: 6px;
+  outline-color: #77a65a;
+  padding: 9px;
+  background: #f8faf6;
+  color: #425342;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.xy-output-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.xy-add-output,
+.xy-output-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 5px;
+  padding: 4px 6px;
+  background: transparent;
+  color: #66815d;
+  font: inherit;
+  font-size: 12px;
+}
+.xy-output-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.xy-output {
+  display: flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 20px 0 5px;
+  color: #5f7259;
+}
+.xy-output code {
+  flex: 1;
+  font-size: 12px;
+}
+.xy-output-remove:disabled {
+  opacity: 0.35;
+}
+.xy-node .flow-remove-button {
+  flex: 0 0 auto;
+}
+.flow-contract {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-top: 10px;
+  color: #81907b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.flow-contract strong {
+  color: #52674d;
+  font-size: 12px;
+}
+.flow-contract code {
+  color: #54764d;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.react-flow__controls,
+.react-flow__minimap {
+  border: 1px solid #dce5d8;
+  border-radius: 7px;
+  overflow: hidden;
+  box-shadow: 0 3px 12px #2d463012;
+}
+.react-flow__controls-button {
+  border-color: #e5ebe1;
+  background: #fff;
+  fill: #53684d;
+}
+.flow-remove-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #879487;
+}
+.flow-remove-button:hover:not(:disabled) {
+  background: #fff0ec;
+  color: #ad604b;
+}
+.flow-remove-button:disabled {
+  opacity: 0.35;
+}
+.flow-node-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #4c9a68;
+  box-shadow: 0 0 0 4px #eaf4e9;
+}
+.flow-empty {
+  padding: 12px;
+  color: #667b61;
+  font-size: 12px;
 }
 .muted {
   color: #91a181;
@@ -1740,6 +2000,68 @@ body:has(.app[data-theme="dark"]) .select-item[data-highlighted] {
 .app[data-theme="dark"] .condition input,
 .app[data-theme="dark"] .condition select {
   caret-color: #9bd4a8;
+}
+.app[data-theme="dark"] .flow-viewport {
+  border-color: var(--dark-border);
+  background-color: #141c17;
+  background-image: radial-gradient(#304137 1px, transparent 1px);
+}
+.app[data-theme="dark"] .flow-actions button {
+  border-color: var(--dark-border);
+  background-color: var(--dark-surface);
+  color: var(--dark-text);
+}
+.app[data-theme="dark"] .flow-actions .flow-add-button {
+  border-color: #397a55;
+  background: #397a55;
+}
+.app[data-theme="dark"] .flow-actions .flow-loop-button.is-active {
+  background: #294535;
+  color: #c7ebd0;
+}
+.app[data-theme="dark"] .flow-toolbar strong {
+  color: var(--dark-text);
+}
+.app[data-theme="dark"] .flow-toolbar p,
+.app[data-theme="dark"] .flow-empty {
+  color: var(--dark-muted);
+}
+.app[data-theme="dark"] .xy-node {
+  border-color: var(--dark-border);
+  background: var(--dark-surface);
+  color: var(--dark-text);
+}
+.app[data-theme="dark"] .xy-node-start strong,
+.app[data-theme="dark"] .xy-node-end strong,
+.app[data-theme="dark"] .xy-node-heading strong,
+.app[data-theme="dark"] .flow-contract strong {
+  color: var(--dark-text);
+}
+.app[data-theme="dark"] .xy-node small,
+.app[data-theme="dark"] .xy-code-label,
+.app[data-theme="dark"] .xy-output-title,
+.app[data-theme="dark"] .flow-contract {
+  color: var(--dark-muted);
+}
+.app[data-theme="dark"] .xy-code {
+  border-color: var(--dark-border);
+  background: #141c17;
+  color: var(--dark-text);
+}
+.app[data-theme="dark"] .xy-node .select-trigger,
+.app[data-theme="dark"] .react-flow__controls-button {
+  border-color: var(--dark-border);
+  background: var(--dark-raised);
+  color: var(--dark-text);
+}
+.app[data-theme="dark"] .react-flow__controls,
+.app[data-theme="dark"] .react-flow__minimap {
+  border-color: var(--dark-border);
+  background: var(--dark-surface);
+}
+.app[data-theme="dark"] .flow-contract code,
+.app[data-theme="dark"] .xy-output code {
+  color: #c7ebd0;
 }
 @media (max-width: 600px) {
   .sidebar-toggle {

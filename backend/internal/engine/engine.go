@@ -15,6 +15,7 @@ import (
 const MaxDelay = 30000
 
 var ErrNoMatch = errors.New("no enabled rule matched method, path and conditions")
+var ErrFlowExecution = errors.New("flow execution failed")
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
 
@@ -58,6 +59,26 @@ type Condition struct {
 	Key    string `json:"key"`
 	Value  string `json:"value"`
 }
+type FlowGraph struct {
+	StartNodeID string           `json:"startNodeId"`
+	Nodes       []FlowNode       `json:"nodes"`
+	Connections []FlowConnection `json:"connections"`
+}
+type FlowNode struct {
+	ID         string   `json:"id"`
+	Type       string   `json:"type"`
+	X          int      `json:"x"`
+	Y          int      `json:"y"`
+	ResponseID string   `json:"responseId,omitempty"`
+	Code       string   `json:"code,omitempty"`
+	Outputs    []string `json:"outputs,omitempty"`
+}
+type FlowConnection struct {
+	ID         string `json:"id"`
+	Source     string `json:"source"`
+	Target     string `json:"target"`
+	SourcePort string `json:"sourcePort,omitempty"`
+}
 type Scenario struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
@@ -68,6 +89,7 @@ type Scenario struct {
 	Exhaustion  string      `json:"exhaustion"`
 	Priority    int         `json:"priority"`
 	Conditions  []Condition `json:"conditions"`
+	Flow        *FlowGraph  `json:"flow,omitempty"`
 }
 type Request struct {
 	Method, Path, Scenario string
@@ -81,9 +103,11 @@ type Match struct {
 	Reason   string
 }
 type Plan struct {
-	Response Response
-	Attempt  int64
-	Match    Match
+	Response     Response
+	Attempt      int64
+	Match        Match
+	NextNode     string
+	LastResponse string
 }
 
 func Validate(config Config) error { return validateConfig(config) }
@@ -259,7 +283,7 @@ func Resolve(m Match, attempt int64) Plan {
 	}
 	for _, r := range m.Endpoint.Responses {
 		if r.ID == s.ResponseIDs[idx] {
-			return Plan{r, attempt, m}
+			return Plan{Response: r, Attempt: attempt, Match: m}
 		}
 	}
 	panic("validated response reference missing")

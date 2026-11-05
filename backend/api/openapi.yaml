@@ -378,6 +378,7 @@ components:
             - failFirst
             - failAfter
             - sequence
+            - flow
         count:
           type: integer
         responseIds:
@@ -395,6 +396,72 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Condition'
+        flow:
+          $ref: '#/components/schemas/FlowGraph'
+      additionalProperties: false
+    FlowGraph:
+      type: object
+      required:
+        - startNodeId
+        - nodes
+        - connections
+      properties:
+        startNodeId:
+          type: string
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlowNode'
+        connections:
+          type: array
+          items:
+            $ref: '#/components/schemas/FlowConnection'
+      additionalProperties: false
+    FlowNode:
+      type: object
+      required:
+        - id
+        - type
+        - x
+        - y
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - start
+            - response
+            - javascript
+            - end
+        x:
+          type: integer
+        y:
+          type: integer
+        responseId:
+          type: string
+        code:
+          type: string
+        outputs:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    FlowConnection:
+      type: object
+      required:
+        - id
+        - source
+        - target
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+        target:
+          type: string
+        sourcePort:
+          type: string
       additionalProperties: false
     Error:
       type: object

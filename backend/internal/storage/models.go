@@ -15,13 +15,15 @@ type configuration struct {
 func (configuration) TableName() string { return "configuration" }
 
 type attemptRecord struct {
-	Project     string `gorm:"primaryKey"`
-	Environment string `gorm:"primaryKey"`
-	Endpoint    string `gorm:"primaryKey"`
-	Revision    string `gorm:"primaryKey"`
-	Session     string `gorm:"primaryKey"`
-	Attempt     int64
-	TouchedAt   time.Time `gorm:"default:now()"`
+	Project      string `gorm:"primaryKey"`
+	Environment  string `gorm:"primaryKey"`
+	Endpoint     string `gorm:"primaryKey"`
+	Revision     string `gorm:"primaryKey"`
+	Session      string `gorm:"primaryKey"`
+	Attempt      int64
+	Cursor       string    `gorm:"not null;default:''"`
+	LastResponse string    `gorm:"not null;default:''"`
+	TouchedAt    time.Time `gorm:"default:now()"`
 }
 
 func (attemptRecord) TableName() string { return "attempts" }

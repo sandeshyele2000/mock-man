@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"time"
@@ -153,7 +154,7 @@ func unchangedScenarioRevision(scenario engine.Scenario, responses []engine.Resp
 		if oldScenario.ID != scenario.ID {
 			continue
 		}
-		current, old := scenario, oldScenario
+		current, old := scenarioWithoutLayout(scenario), scenarioWithoutLayout(oldScenario)
 		current.Revision = ""
 		old.Revision = ""
 		if reflect.DeepEqual(current, old) && reflect.DeepEqual(responses, previous.Responses) {
@@ -162,6 +163,22 @@ func unchangedScenarioRevision(scenario engine.Scenario, responses []engine.Resp
 	}
 	return ""
 }
+
+func scenarioWithoutLayout(scenario engine.Scenario) engine.Scenario {
+	if scenario.Behavior != "flow" || scenario.Flow == nil {
+		scenario.Flow = nil
+		return scenario
+	}
+	flow := *scenario.Flow
+	flow.Nodes = append([]engine.FlowNode(nil), flow.Nodes...)
+	for index := range flow.Nodes {
+		flow.Nodes[index].X = 0
+		flow.Nodes[index].Y = 0
+	}
+	scenario.Flow = &flow
+	return scenario
+}
+
 func (s *Store) Save(ctx context.Context, c engine.Config) (engine.Config, error) {
 	if err := engine.Validate(c); err != nil {
 		return c, err
@@ -201,11 +218,21 @@ func (s *Store) Match(ctx context.Context, project, environment, session string,
 		if err := checkAttemptCapacity(ctx, tx, project, environment, session, match); err != nil {
 			return err
 		}
-		attempt, err := allocateAttempt(ctx, tx, project, environment, session, match)
+		attempt, cursor, lastResponse, err := allocateAttempt(ctx, tx, project, environment, session, match)
 		if err != nil {
 			return err
 		}
-		plan = engine.Resolve(match, attempt)
+		if match.Scenario.Behavior == "flow" {
+			plan, err = engine.ResolveFlow(match, attempt, request, session, environment, cursor, lastResponse)
+			if err != nil {
+				return fmt.Errorf("%w: %v", engine.ErrFlowExecution, err)
+			}
+			if err := saveFlowCursor(ctx, tx, project, environment, session, match, plan); err != nil {
+				return err
+			}
+		} else {
+			plan = engine.Resolve(match, attempt)
+		}
 		if err := writeRequestLog(ctx, tx, project, environment, session, request, plan); err != nil {
 			return err
 		}
@@ -253,13 +280,19 @@ func checkAttemptCapacity(ctx context.Context, tx *gorm.DB, project, environment
 	return nil
 }
 
-func allocateAttempt(ctx context.Context, tx *gorm.DB, project, environment, session string, match engine.Match) (int64, error) {
+func allocateAttempt(ctx context.Context, tx *gorm.DB, project, environment, session string, match engine.Match) (int64, string, string, error) {
 	counter := attemptRecord{Project: project, Environment: environment, Endpoint: match.Endpoint.ID, Revision: match.Scenario.Revision, Session: session, Attempt: 1}
 	err := gorm.G[attemptRecord](tx, clause.OnConflict{
 		Columns:   []clause.Column{{Name: "project"}, {Name: "environment"}, {Name: "endpoint"}, {Name: "revision"}, {Name: "session"}},
 		DoUpdates: clause.Assignments(map[string]any{"attempt": gorm.Expr("attempts.attempt + 1"), "touched_at": gorm.Expr("now()")}),
-	}, clause.Returning{Columns: []clause.Column{{Name: "attempt"}}}).Create(ctx, &counter)
-	return counter.Attempt, err
+	}, clause.Returning{Columns: []clause.Column{{Name: "attempt"}, {Name: "cursor"}, {Name: "last_response"}}}).Create(ctx, &counter)
+	return counter.Attempt, counter.Cursor, counter.LastResponse, err
+}
+
+func saveFlowCursor(ctx context.Context, tx *gorm.DB, project, environment, session string, match engine.Match, plan engine.Plan) error {
+	return tx.WithContext(ctx).Model(&attemptRecord{}).
+		Where("project = ? AND environment = ? AND endpoint = ? AND revision = ? AND session = ?", project, environment, match.Endpoint.ID, match.Scenario.Revision, session).
+		Updates(map[string]any{"cursor": plan.NextNode, "last_response": plan.LastResponse, "touched_at": time.Now()}).Error
 }
 
 func writeRequestLog(ctx context.Context, tx *gorm.DB, project, environment, session string, request engine.Request, plan engine.Plan) error {
