@@ -19,6 +19,7 @@ import {
   type TryResult,
 } from "../api";
 import { Button } from "./ui/button";
+import { SelectField } from "./ui/select";
 const id = () => crypto.randomUUID().slice(0, 8);
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 export const behaviors = {
@@ -37,18 +38,23 @@ function Field({
   hint?: string;
 }) {
   const fieldId = useId();
+  const labelId = `${fieldId}-label`;
   return (
     <div className="field">
-      <label htmlFor={fieldId}>{label}</label>
+      <label id={labelId} htmlFor={fieldId}>
+        {label}
+      </label>
       {isValidElement(children)
         ? cloneElement(
             children as ReactElement<{
               id?: string;
               "aria-describedby"?: string;
+              "aria-labelledby"?: string;
             }>,
             {
               id: fieldId,
               "aria-describedby": hint ? `${fieldId}-hint` : undefined,
+              "aria-labelledby": labelId,
             },
           )
         : children}
@@ -214,16 +220,19 @@ export function EntityForm({
       {kind === "endpoint" && (
         <div className="form-grid">
           <Field label="Method">
-            <select
+            <SelectField
               value={method}
-              onChange={(e) => setMethod(e.target.value as Endpoint["method"])}
-            >
-              {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map(
-                (m) => (
-                  <option key={m}>{m}</option>
-                ),
-              )}
-            </select>
+              onValueChange={(v) => setMethod(v as Endpoint["method"])}
+              options={[
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE",
+                "HEAD",
+                "OPTIONS",
+              ].map((m) => ({ value: m, label: m }))}
+            />
           </Field>
           <Field label="API path">
             <input
@@ -369,24 +378,21 @@ export function ScenarioForm({
   );
   const responseSelect = (i: number, label: string) => (
     <Field key={i} label={label}>
-      <select
-        required
+      <SelectField
         value={ids[i] || ""}
-        onChange={(e) =>
+        onValueChange={(value) =>
           setIds((prev) => {
             const v = [...prev];
-            v[i] = e.target.value;
+            v[i] = value;
             return v;
           })
         }
-      >
-        <option value="">Select a response</option>
-        {responses.map((r) => (
-          <option key={r.id} value={r.id}>
-            {r.name} · {r.status}
-          </option>
-        ))}
-      </select>
+        placeholder="Select a response"
+        options={responses.map((r) => ({
+          value: r.id,
+          label: `${r.name} · ${r.status}`,
+        }))}
+      />
     </Field>
   );
   return (
@@ -416,10 +422,10 @@ export function ScenarioForm({
         />
       </Field>
       <Field label="Behavior">
-        <select
+        <SelectField
           value={behavior}
-          onChange={(e) => {
-            const b = e.target.value as Scenario["behavior"];
+          onValueChange={(value) => {
+            const b = value as Scenario["behavior"];
             setBehavior(b);
             setIds(
               b === "always"
@@ -430,13 +436,11 @@ export function ScenarioForm({
                   ],
             );
           }}
-        >
-          {Object.entries(behaviors).map(([v, l]) => (
-            <option key={v} value={v}>
-              {l}
-            </option>
-          ))}
-        </select>
+          options={Object.entries(behaviors).map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
       </Field>
       {(behavior === "failFirst" || behavior === "failAfter") && (
         <>
@@ -493,15 +497,16 @@ export function ScenarioForm({
             </Button>
           </div>
           <Field label="When the sequence ends">
-            <select
+            <SelectField
               value={exhaustion}
-              onChange={(e) =>
-                setExhaustion(e.target.value as Scenario["exhaustion"])
+              onValueChange={(value) =>
+                setExhaustion(value as Scenario["exhaustion"])
               }
-            >
-              <option value="repeat">Repeat final response</option>
-              <option value="loop">Loop sequence</option>
-            </select>
+              options={[
+                { value: "repeat", label: "Repeat final response" },
+                { value: "loop", label: "Loop sequence" },
+              ]}
+            />
           </Field>
         </>
       )}
@@ -510,23 +515,22 @@ export function ScenarioForm({
       </div>
       {conditions.map((c, i) => (
         <div className="condition" key={i}>
-          <select
+          <SelectField
             aria-label={`Condition ${i + 1} source`}
             value={c.source}
-            onChange={(e) =>
+            onValueChange={(value) =>
               setConditions(
                 conditions.map((v, j) =>
-                  j === i
-                    ? { ...v, source: e.target.value as Condition["source"] }
-                    : v,
+                  j === i ? { ...v, source: value as Condition["source"] } : v,
                 ),
               )
             }
-          >
-            <option value="query">Query</option>
-            <option value="header">Header</option>
-            <option value="body">JSON body</option>
-          </select>
+            options={[
+              { value: "query", label: "Query" },
+              { value: "header", label: "Header" },
+              { value: "body", label: "JSON body" },
+            ]}
+          />
           <input
             aria-label={`Condition ${i + 1} key`}
             required
@@ -596,13 +600,11 @@ export function TryForm({
   endpoint,
   project,
   environment,
-  session,
   onDone,
 }: {
   endpoint: Endpoint;
   project: string;
   environment: string;
-  session: string;
   onDone: () => void;
 }) {
   const [path, setPath] = useState(endpoint.path);
@@ -628,7 +630,6 @@ export function TryForm({
         scenario,
         project,
         environment,
-        session,
       });
     },
     onSuccess: onDone,
@@ -641,10 +642,6 @@ export function TryForm({
         request.mutate();
       }}
     >
-      <p className="muted">
-        Uses saved configuration and consumes an attempt in session{" "}
-        <code>{session}</code>.
-      </p>
       <Field label={`${endpoint.method} · Request path and query`}>
         <input
           value={path}
@@ -653,14 +650,16 @@ export function TryForm({
         />
       </Field>
       <Field label="Scenario override">
-        <select value={scenario} onChange={(e) => setScenario(e.target.value)}>
-          <option value="">Use configured rules</option>
-          {endpoint.scenarios.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+        <SelectField
+          value={scenario}
+          onValueChange={setScenario}
+          placeholder="Use configured rules"
+          emptyOptionLabel="Use configured rules"
+          options={endpoint.scenarios.map((s) => ({
+            value: s.id,
+            label: s.name,
+          }))}
+        />
       </Field>
       <Field label="Request headers (JSON)">
         <textarea

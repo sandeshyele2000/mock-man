@@ -8,12 +8,12 @@ import {
   behaviors,
 } from "./components/editors";
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   ArrowDownUp,
   ArrowRight,
-  Box,
   Check,
   ChevronDown,
   ChevronRight,
@@ -22,6 +22,7 @@ import {
   Copy,
   Folder,
   Layers,
+  Moon,
   MoreHorizontal,
   Pencil,
   Play,
@@ -30,7 +31,10 @@ import {
   Search,
   Server,
   Settings2,
+  Sun,
   Trash2,
+  PanelLeftClose,
+  PanelLeftOpen,
   X,
   Zap,
 } from "lucide-react";
@@ -46,6 +50,8 @@ import {
   type Log,
 } from "./api";
 import { Button } from "./components/ui/button";
+import { SelectField } from "./components/ui/select";
+import { MockmanMark } from "./components/brand";
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 type ModalState =
   | { kind: "project"; value?: Project }
@@ -53,16 +59,19 @@ type ModalState =
   | { kind: "endpoint"; value?: Endpoint }
   | { kind: "response"; value?: Response }
   | { kind: "scenario"; value?: Scenario }
-  | { kind: "try" }
-  | { kind: "reset" };
+  | { kind: "try" };
 export default function App() {
   const client = useQueryClient();
   const config = useQuery({ queryKey: ["config"], queryFn: loadConfig });
   const [projectID, setProjectID] = useState("demo");
   const [featureID, setFeatureID] = useState("");
+  const [expandedFeatureID, setExpandedFeatureID] = useState("");
   const [endpointID, setEndpointID] = useState("");
   const [environment, setEnvironment] = useState("development");
-  const [session, setSession] = useState("default");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    localStorage.getItem("mockman-theme") === "dark" ? "dark" : "light",
+  );
   const [tab, setTab] = useState("responses");
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -100,6 +109,9 @@ export default function App() {
       return () => clearTimeout(t);
     }
   }, [notice]);
+  useEffect(() => {
+    localStorage.setItem("mockman-theme", theme);
+  }, [theme]);
   function change(
     update: (
       next: Config,
@@ -143,6 +155,7 @@ export default function App() {
         if (idx < 0) p.features.push(value as Feature);
         else p.features[idx] = value as Feature;
         setFeatureID(value.id);
+        setExpandedFeatureID(value.id);
       });
     else
       change((_, __, f) => {
@@ -170,23 +183,27 @@ export default function App() {
       if (!e.active[env]) e.active[env] = v.id;
     });
   }
-  const reset = useMutation({
-    mutationFn: (scope: string) =>
-      api("/api/reset", "POST", {
-        project: p?.id,
-        environment: env,
-        session: scope === "environment" ? "" : session,
-        endpoint: scope === "endpoint" ? e?.id : "",
-      }),
-    onSuccess: () => {
-      setModal(null);
-      setNotice("Attempts reset. The next matched request starts at 1.");
-      void client.invalidateQueries({ queryKey: ["logs"] });
-    },
-    onError: (err) => setError(err.message),
-  });
   const active = e?.scenarios.find((s) => s.id === e.active[env]);
-  const validSession = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(session);
+  function nextResponseIndex(scenario: Scenario) {
+    const latest = logs.data?.find(
+      (log) =>
+        log.detail.endpoint === e?.id &&
+        log.detail.scenario === scenario.id &&
+        log.detail.revision === scenario.revision &&
+        log.detail.session === "default",
+    );
+    const attempt = latest?.detail.attempt ?? 1;
+    if (scenario.behavior === "failFirst")
+      return attempt > scenario.count ? 1 : 0;
+    if (scenario.behavior === "failAfter")
+      return attempt <= scenario.count ? 1 : 0;
+    if (scenario.behavior === "sequence") {
+      return scenario.exhaustion === "repeat"
+        ? Math.min(attempt - 1, scenario.responseIds.length - 1)
+        : (attempt - 1) % scenario.responseIds.length;
+    }
+    return 0;
+  }
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
   const curl =
     e && p
@@ -194,7 +211,6 @@ export default function App() {
           `curl -i -X ${e.method} ${quote(`${MOCK_SERVER_URL.replace(/\/$/, "")}${encodeURI(e.path)}`)}`,
           `  -H ${quote(`X-Mock-Project: ${p.id}`)}`,
           `  -H ${quote(`X-Mock-Environment: ${env}`)}`,
-          `  -H ${quote(`X-Mock-Session: ${session}`)}`,
         ].join(" \\\n")
       : "";
   async function copyCurl() {
@@ -208,7 +224,7 @@ export default function App() {
   if (config.isPending)
     return (
       <div className="boot">
-        <Box size={32} />
+        <MockmanMark size={32} />
         <h2>Opening your workspace…</h2>
       </div>
     );
@@ -221,133 +237,179 @@ export default function App() {
       </div>
     );
   return (
-    <div className="app">
-      <aside className="sidebar">
+    <div className="app" data-theme={theme}>
+      <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <a className="brand" href="/">
           <span className="brand-icon">
-            <Box size={23} />
+            <MockmanMark size={23} />
           </span>
-          mockman<span className="beta">LOCAL</span>
         </a>
-        <div className="workspace-label">WORKSPACE</div>
-        <div className="project-select">
-          <Layers size={17} />
-          <select
-            aria-label="Project"
-            value={p?.id || ""}
-            onChange={(ev) => {
-              setProjectID(ev.target.value);
-              setFeatureID("");
-              setEndpointID("");
-            }}
-          >
-            {c?.projects.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-            {!p && <option>No projects yet</option>}
-          </select>
-        </div>
-        <div className="project-actions">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setModal({ kind: "project" })}
-          >
-            <Plus size={13} />
-            Project
-          </Button>
-          {p && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Edit project"
-                onClick={() => setModal({ kind: "project", value: p })}
-              >
-                <Settings2 size={14} />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Delete project"
-                onClick={() =>
-                  remove("project", p.name, (next) => {
-                    next.projects = next.projects.filter((v) => v.id !== p.id);
-                  })
-                }
-              >
-                <Trash2 size={13} />
-              </Button>
-            </>
+        <Button
+          className="sidebar-toggle"
+          variant="ghost"
+          size="icon"
+          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        >
+          {sidebarCollapsed ? (
+            <PanelLeftOpen size={16} />
+          ) : (
+            <PanelLeftClose size={16} />
           )}
-        </div>
-        <div className="side-rule" />
-        <div className="side-heading">
-          FEATURES
-          <Button
-            disabled={!p}
-            variant="ghost"
-            size="icon"
-            aria-label="Add feature"
-            onClick={() => setModal({ kind: "feature" })}
-          >
-            <Plus size={15} />
-          </Button>
-        </div>
-        <nav>
-          {p?.features.map((feature) => (
-            <div key={feature.id}>
-              <button
-                className={`feature-nav ${f?.id === feature.id ? "selected" : ""}`}
-                onClick={() => {
-                  setFeatureID(feature.id);
+        </Button>
+        {!sidebarCollapsed && (
+          <>
+            <div className="workspace-label">WORKSPACE</div>
+            <div className="project-select">
+              <Layers size={17} />
+              <SelectField
+                aria-label="Project"
+                value={p?.id || ""}
+                onValueChange={(value) => {
+                  setProjectID(value);
+                  setFeatureID("");
+                  setExpandedFeatureID("");
                   setEndpointID("");
                 }}
-              >
-                <Folder size={16} />
-                <span>{feature.name}</span>
-                <span className="count">{feature.endpoints.length}</span>
-                {f?.id === feature.id ? (
-                  <ChevronDown size={14} />
-                ) : (
-                  <ChevronRight size={14} />
-                )}
-              </button>
-              {f?.id === feature.id &&
-                feature.endpoints.map((endpoint) => (
-                  <button
-                    key={endpoint.id}
-                    className={`endpoint-nav ${e?.id === endpoint.id ? "current" : ""}`}
-                    onClick={() => setEndpointID(endpoint.id)}
-                  >
-                    <span
-                      className={`method-small ${endpoint.method.toLowerCase()}`}
-                    >
-                      {endpoint.method}
-                    </span>
-                    <span>{endpoint.name}</span>
-                    {!endpoint.enabled && <Circle size={8} />}
-                  </button>
-                ))}
+                options={
+                  c?.projects.map((v) => ({ value: v.id, label: v.name })) || []
+                }
+                placeholder="No projects yet"
+              />
             </div>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="server-state">
-            <span className="live-dot" />
-            <span>Local workspace</span>
-            <span className="port">:{MOCK_PORT}</span>
-          </div>
-          <div className="version">
-            <span>Mockman</span>
-            <span>v0.1</span>
-          </div>
-        </div>
+            <div className="project-actions">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setModal({ kind: "project" })}
+              >
+                <Plus size={13} />
+                Project
+              </Button>
+              {p && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Edit project"
+                    onClick={() => setModal({ kind: "project", value: p })}
+                  >
+                    <Settings2 size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete project"
+                    onClick={() =>
+                      remove("project", p.name, (next) => {
+                        next.projects = next.projects.filter(
+                          (v) => v.id !== p.id,
+                        );
+                      })
+                    }
+                  >
+                    <Trash2 size={13} />
+                  </Button>
+                </>
+              )}
+            </div>
+            <div className="side-rule" />
+            <div className="side-heading">
+              FEATURES
+              <Button
+                disabled={!p}
+                variant="ghost"
+                size="icon"
+                aria-label="Add feature"
+                onClick={() => setModal({ kind: "feature" })}
+              >
+                <Plus size={15} />
+              </Button>
+            </div>
+            <nav>
+              {p?.features.map((feature) => (
+                <div key={feature.id}>
+                  <button
+                    className={`feature-nav ${f?.id === feature.id ? "selected" : ""}`}
+                    aria-expanded={expandedFeatureID === feature.id}
+                    onClick={() => {
+                      setFeatureID(feature.id);
+                      setExpandedFeatureID(
+                        expandedFeatureID === feature.id ? "" : feature.id,
+                      );
+                      setEndpointID("");
+                    }}
+                  >
+                    <Folder size={16} />
+                    <span>{feature.name}</span>
+                    <span className="count">{feature.endpoints.length}</span>
+                    {expandedFeatureID === feature.id ? (
+                      <ChevronDown size={14} />
+                    ) : (
+                      <ChevronRight size={14} />
+                    )}
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {expandedFeatureID === feature.id && (
+                      <motion.div
+                        className="feature-endpoints"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                      >
+                        {feature.endpoints.map((endpoint) => (
+                          <button
+                            key={endpoint.id}
+                            className={`endpoint-nav ${e?.id === endpoint.id ? "current" : ""}`}
+                            onClick={() => setEndpointID(endpoint.id)}
+                          >
+                            <span
+                              className={`method-small ${endpoint.method.toLowerCase()}`}
+                            >
+                              {endpoint.method}
+                            </span>
+                            <span>{endpoint.name}</span>
+                            {!endpoint.enabled && <Circle size={8} />}
+                          </button>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </nav>
+            <div className="sidebar-bottom">
+              <div className="server-state">
+                <span className="live-dot" />
+                <span>Local workspace</span>
+                <span className="port">:{MOCK_PORT}</span>
+              </div>
+              <div className="version">
+                <span>Mockman</span>
+                <span>v0.1</span>
+              </div>
+            </div>
+          </>
+        )}
       </aside>
       <div className="workspace">
         <header className="topbar">
+          <Button
+            className="mobile-sidebar-toggle"
+            variant="ghost"
+            size="icon"
+            aria-label={
+              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={16} />
+            ) : (
+              <PanelLeftClose size={16} />
+            )}
+          </Button>
           <div className="breadcrumb">
             <span>Workspace</span>
             <ChevronRight size={13} />
@@ -357,15 +419,22 @@ export default function App() {
           </div>
           <div className="top-context">
             <span className="live-dot" />
-            <select
+            <SelectField
               aria-label="Environment"
               value={env}
-              onChange={(ev) => setEnvironment(ev.target.value)}
+              onValueChange={setEnvironment}
+              options={
+                p?.environments.map((v) => ({ value: v, label: v })) || []
+              }
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             >
-              {p?.environments.map((v) => (
-                <option key={v}>{v}</option>
-              ))}
-            </select>
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </Button>
           </div>
         </header>
         <main>
@@ -467,7 +536,13 @@ export default function App() {
               </span>
             </div>
           </div>
-          <div className="content-grid">
+          <motion.div
+            key={e?.id || "empty-workspace"}
+            className="content-grid"
+            initial={{ opacity: 0, y: 7 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
             <section className="endpoint-list panel">
               <div className="panel-heading">
                 <h2>
@@ -522,12 +597,6 @@ export default function App() {
                     <p>Add your first method and API path.</p>
                   </div>
                 )}
-              </div>
-              <div className="list-footer">
-                <Server size={14} />
-                <span>
-                  Mock server <code>{MOCK_HOST}</code>
-                </span>
               </div>
             </section>
             <section className="endpoint-detail panel">
@@ -585,7 +654,6 @@ export default function App() {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={!validSession}
                       onClick={() => setModal({ kind: "try" })}
                     >
                       <Play size={13} />
@@ -779,17 +847,28 @@ export default function App() {
                                 ` · ${s.exhaustion === "loop" ? "Loop" : "Repeat final"}`}
                             </p>
                             <div className="response-flow">
-                              {s.responseIds.map((rid, i) => (
-                                <span key={i}>
-                                  {i > 0 && <ArrowRight size={13} />}
-                                  <code>
-                                    {
-                                      e.responses.find((r) => r.id === rid)
-                                        ?.name
-                                    }
-                                  </code>
-                                </span>
-                              ))}
+                              {s.responseIds.map((rid, i) => {
+                                const isNext =
+                                  s.id === active?.id &&
+                                  i === nextResponseIndex(s);
+                                return (
+                                  <span
+                                    className={isNext ? "is-next" : undefined}
+                                    key={i}
+                                  >
+                                    {i > 0 && <ArrowRight size={13} />}
+                                    <code>
+                                      {
+                                        e.responses.find((r) => r.id === rid)
+                                          ?.name
+                                      }
+                                    </code>
+                                    {isNext && (
+                                      <small className="step-state">NEXT</small>
+                                    )}
+                                  </span>
+                                );
+                              })}
                             </div>
                             {s.conditions.length > 0 && (
                               <p className="conditions-preview">
@@ -882,8 +961,6 @@ export default function App() {
                                 <dl>
                                   <dt>Scenario</dt>
                                   <dd>{l.detail.scenario}</dd>
-                                  <dt>Session</dt>
-                                  <dd>{l.detail.session}</dd>
                                   <dt>Revision</dt>
                                   <dd>{l.detail.revision}</dd>
                                   <dt>Matched rule</dt>
@@ -961,7 +1038,7 @@ export default function App() {
                 </>
               ) : (
                 <div className="empty large">
-                  <Box size={36} />
+                  <MockmanMark size={36} />
                   <h3>
                     {p ? "Build your first mock API" : "Welcome to Mockman"}
                   </h3>
@@ -985,44 +1062,7 @@ export default function App() {
                 </div>
               )}
             </section>
-          </div>
-          <div className="session-bar">
-            <div>
-              <span className="session-icon">
-                <Settings2 size={16} />
-              </span>
-              <span>
-                <b>Test session</b>
-                <small>Attempts are isolated by session and environment.</small>
-              </span>
-            </div>
-            <label>
-              Session ID
-              <input
-                aria-label="Session ID"
-                aria-invalid={!validSession}
-                maxLength={64}
-                value={session}
-                onChange={(ev) => setSession(ev.target.value)}
-                pattern="[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}"
-              />
-            </label>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!p || !validSession}
-              onClick={() => setModal({ kind: "reset" })}
-            >
-              <RotateCcw size={13} />
-              Reset attempts
-            </Button>
-          </div>
-          {!validSession && (
-            <p role="alert" className="error">
-              Session IDs need 1–64 letters, numbers, underscores or hyphens,
-              starting with a letter or number.
-            </p>
-          )}
+          </motion.div>
         </main>
       </div>
       {notice && (
@@ -1033,7 +1073,7 @@ export default function App() {
       )}
       {modal && (
         <Modal
-          title={`${modal.kind === "try" ? "Try request" : modal.kind === "reset" ? "Reset attempt counters" : `${modal.value ? "Edit" : "Create"} ${modal.kind}`}`}
+          title={`${modal.kind === "try" ? "Try request" : `${modal.value ? "Edit" : "Create"} ${modal.kind}`}`}
           onClose={() => setModal(null)}
         >
           {error && (
@@ -1073,41 +1113,9 @@ export default function App() {
               endpoint={e}
               project={p.id}
               environment={env}
-              session={session}
               onDone={() => void logs.refetch()}
             />
           )}{" "}
-          {modal.kind === "reset" && (
-            <div>
-              <p className="muted">
-                Existing logs remain available. In-flight requests finish with
-                their already selected response.
-              </p>
-              <div className="reset-options">
-                <Button
-                  variant="outline"
-                  disabled={reset.isPending}
-                  onClick={() => reset.mutate("endpoint")}
-                >
-                  This endpoint · session {session}
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={reset.isPending}
-                  onClick={() => reset.mutate("session")}
-                >
-                  All endpoints · session {session}
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={reset.isPending}
-                  onClick={() => reset.mutate("environment")}
-                >
-                  Entire {env} environment
-                </Button>
-              </div>
-            </div>
-          )}
         </Modal>
       )}
     </div>
