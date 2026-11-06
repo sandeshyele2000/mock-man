@@ -627,6 +627,31 @@ main {
   gap: 10px;
   margin-bottom: 20px;
 }
+.list-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 15px;
+  padding: 8px 10px;
+  border: 1px solid #e9ece3;
+  border-radius: 6px;
+  background: #fafbf8;
+  color: #a0a897;
+}
+.list-search input {
+  width: 100%;
+  min-width: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+}
+.list-search input::placeholder {
+  color: #a3ac98;
+}
+.list-empty {
+  margin-top: 10px;
+}
 .scenario-import-actions {
   display: flex;
   align-items: center;
@@ -1947,6 +1972,7 @@ button:not(:disabled):hover {
 }
 .app[data-theme="dark"] .project-select,
 .app[data-theme="dark"] .search,
+.app[data-theme="dark"] .list-search,
 .app[data-theme="dark"] .stat-icon,
 .app[data-theme="dark"] .response-card pre,
 .app[data-theme="dark"] .curl,

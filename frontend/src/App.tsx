@@ -76,6 +76,8 @@ export default function App() {
   );
   const [tab, setTab] = useState("responses");
   const [search, setSearch] = useState("");
+  const [responseSearch, setResponseSearch] = useState("");
+  const [scenarioSearch, setScenarioSearch] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -553,6 +555,43 @@ export default function App() {
           `  -H ${quote(`X-Mock-Environment: ${env}`)}`,
         ].join(" \\\n")
       : "";
+  const responseQuery = responseSearch.trim().toLowerCase();
+  const filteredResponses = (e?.responses ?? []).filter((response) =>
+    [
+      response.name,
+      response.status,
+      response.delayMs,
+      pretty(response.body),
+      pretty(response.headers),
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(responseQuery),
+  );
+  const scenarioQuery = scenarioSearch.trim().toLowerCase();
+  const filteredScenarios = (e?.scenarios ?? []).filter((scenario) => {
+    const responseNames = scenario.responseIds
+      .map(
+        (responseID) =>
+          e?.responses.find((response) => response.id === responseID)?.name,
+      )
+      .filter(Boolean);
+    return [
+      scenario.name,
+      scenario.behavior,
+      behaviors[scenario.behavior as keyof typeof behaviors],
+      scenario.count,
+      scenario.exhaustion,
+      ...responseNames,
+      ...scenario.conditions.map(
+        (condition) =>
+          `${condition.source} ${condition.key} ${condition.value}`,
+      ),
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(scenarioQuery);
+  });
   async function copyCurl() {
     try {
       await navigator.clipboard.writeText(curl);
@@ -1069,7 +1108,19 @@ export default function App() {
                             Add response
                           </Button>
                         </div>
-                        {e.responses.map((r) => (
+                        <label className="list-search">
+                          <Search size={14} aria-hidden="true" />
+                          <input
+                            type="search"
+                            aria-label="Search responses"
+                            placeholder="Search responses…"
+                            value={responseSearch}
+                            onChange={(event) =>
+                              setResponseSearch(event.target.value)
+                            }
+                          />
+                        </label>
+                        {filteredResponses.map((r) => (
                           <article className="response-card" key={r.id}>
                             <div className="card-heading">
                               <div>
@@ -1126,7 +1177,7 @@ export default function App() {
                             </div>
                           </article>
                         ))}
-                        {!e.responses.length && (
+                        {e.responses.length === 0 && (
                           <div className="empty">
                             <Code2 />
                             <h3>Give this endpoint a response</h3>
@@ -1135,6 +1186,14 @@ export default function App() {
                             </p>
                           </div>
                         )}
+                        {e.responses.length > 0 &&
+                          filteredResponses.length === 0 && (
+                            <div className="empty list-empty">
+                              <Search />
+                              <h3>No matching responses</h3>
+                              <p>Try a different search term.</p>
+                            </div>
+                          )}
                       </>
                     )}
                     {tab === "scenarios" && (
@@ -1174,7 +1233,19 @@ export default function App() {
                             </Button>
                           </div>
                         </div>
-                        {e.scenarios.map((s) => (
+                        <label className="list-search">
+                          <Search size={14} aria-hidden="true" />
+                          <input
+                            type="search"
+                            aria-label="Search scenarios"
+                            placeholder="Search scenarios…"
+                            value={scenarioSearch}
+                            onChange={(event) =>
+                              setScenarioSearch(event.target.value)
+                            }
+                          />
+                        </label>
+                        {filteredScenarios.map((s) => (
                           <article
                             className={`scenario-card ${s.id === active?.id ? "is-active" : ""}`}
                             key={s.id}
@@ -1309,7 +1380,7 @@ export default function App() {
                             </div>
                           </article>
                         ))}
-                        {!e.scenarios.length && (
+                        {e.scenarios.length === 0 && (
                           <div className="empty">
                             <Zap />
                             <h3>No scenario selected</h3>
@@ -1320,6 +1391,14 @@ export default function App() {
                             </p>
                           </div>
                         )}
+                        {e.scenarios.length > 0 &&
+                          filteredScenarios.length === 0 && (
+                            <div className="empty list-empty">
+                              <Search />
+                              <h3>No matching scenarios</h3>
+                              <p>Try a different search term.</p>
+                            </div>
+                          )}
                       </>
                     )}
                     {tab === "logs" && (
