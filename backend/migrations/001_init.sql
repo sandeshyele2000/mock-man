@@ -1,3 +1,4 @@
+-- Created by Sandesh
 CREATE TABLE IF NOT EXISTS configuration (
  id boolean PRIMARY KEY DEFAULT true CHECK (id),
  version bigint NOT NULL DEFAULT 1,

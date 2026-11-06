@@ -1,3 +1,4 @@
+// Created by Sandesh
 import type { components, paths } from "./schema";
 import { API_BASE_URL } from "./config";
 export type Config = components["schemas"]["Config"];
