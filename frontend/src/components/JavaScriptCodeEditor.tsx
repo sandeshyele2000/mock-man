@@ -1,8 +1,8 @@
-import Editor, { loader, type Monaco } from "@monaco-editor/react";
+import Editor, { loader } from "@monaco-editor/react";
+import { typescript } from "monaco-editor";
 import * as monaco from "../../node_modules/monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker";
 import tsWorker from "../../node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js?worker";
-import "../../node_modules/monaco-editor/esm/vs/language/typescript/monaco.contribution.js";
 
 type Props = {
   value: string;
@@ -103,15 +103,15 @@ workerGlobal.MonacoEnvironment = {
 
 let runtimeTypesRegistered = false;
 
-function configureJavaScript(monacoInstance: Monaco) {
-  const defaults = monacoInstance.languages.typescript.javascriptDefaults;
+function configureJavaScript() {
+  const defaults = typescript.javascriptDefaults;
   defaults.setCompilerOptions({
     allowNonTsExtensions: true,
     checkJs: true,
     lib: ["es2020"],
     noEmit: true,
     strict: true,
-    target: monacoInstance.languages.typescript.ScriptTarget.ES2020,
+    target: typescript.ScriptTarget.ES2020,
   });
   defaults.setDiagnosticsOptions({
     noSyntaxValidation: true,

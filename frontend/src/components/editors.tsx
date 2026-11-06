@@ -34,7 +34,7 @@ export const behaviors = {
   failFirst: "Fail first N attempts",
   failAfter: "Fail after N attempts",
   sequence: "Response sequence",
-  javascript: "JavaScript",
+  javascript: "Custom",
 };
 const JavaScriptCodeEditor = lazy(() =>
   import("./JavaScriptCodeEditor").then((module) => ({
