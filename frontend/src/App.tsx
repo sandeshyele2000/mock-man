@@ -313,6 +313,20 @@ export default function App() {
                 responseIds: scenario.responseIds.map((id) =>
                   requireMappedID(responseIDs, id, "response"),
                 ),
+                ...(scenario.code
+                  ? {
+                      code: [...responseIDs].reduce(
+                        (code, [oldID, newID]) =>
+                          code
+                            .replaceAll(
+                              JSON.stringify(oldID),
+                              JSON.stringify(newID),
+                            )
+                            .replaceAll(`'${oldID}'`, `'${newID}'`),
+                        scenario.code,
+                      ),
+                    }
+                  : {}),
                 ...(scenario.flow
                   ? {
                       flow: {
@@ -444,6 +458,17 @@ export default function App() {
         ...scenario,
         id: crypto.randomUUID().slice(0, 8),
         revision: "",
+        ...(scenario.code
+          ? {
+              code: [...ids].reduce(
+                (code, [oldID, newID]) =>
+                  code
+                    .replaceAll(JSON.stringify(oldID), JSON.stringify(newID))
+                    .replaceAll(`'${oldID}'`, `'${newID}'`),
+                scenario.code,
+              ),
+            }
+          : {}),
         responseIds: scenario.responseIds.map((responseID) => {
           const mapped = ids.get(responseID);
           if (!mapped)
@@ -1227,6 +1252,7 @@ export default function App() {
                                 const isNext =
                                   s.id === active?.id &&
                                   s.behavior !== "flow" &&
+                                  s.behavior !== "javascript" &&
                                   i === nextResponseIndex(s);
                                 return (
                                   <span
@@ -1483,6 +1509,7 @@ export default function App() {
               responses={e.responses}
               onSave={saveScenario}
               busy={save.isPending}
+              theme={theme}
             />
           )}{" "}
           {modal.kind === "try" && e && p && (

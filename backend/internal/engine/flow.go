@@ -44,7 +44,7 @@ func ResolveFlow(match Match, attempt int64, request Request, session, environme
 				NextNode: next.Target, LastResponse: response.ID,
 			}, nil
 		case "javascript":
-			result, err := runJavaScript(node.Code, newFlowInput(request, attempt, session, environment, data))
+			result, err := runJavaScript(node.Code, newFlowInput(request, attempt, session, environment, data, match.Endpoint, nil))
 			if err != nil {
 				return Plan{}, fmt.Errorf("node %s: %w", node.ID, err)
 			}

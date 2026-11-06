@@ -162,12 +162,18 @@ func validateScenario(scenario Scenario, seen, responses map[string]bool) error 
 	if scenario.Behavior == "flow" && (scenario.Flow == nil || count > 100) {
 		return errors.New("flow scenarios need a flow graph and at most 100 response IDs")
 	}
+	if scenario.Behavior == "javascript" && (strings.TrimSpace(scenario.Code) == "" || len(scenario.Code) > 32768 || scenario.Count < 0 || scenario.Count > 1000000 || count == 0 || count > 100) {
+		return errors.New("JavaScript scenarios need code up to 32 KiB and 1–100 allowed responses")
+	}
+	if scenario.Behavior != "javascript" && scenario.Code != "" {
+		return errors.New("only JavaScript scenarios can contain code")
+	}
 	if scenario.Flow != nil {
 		if err := validateFlow(*scenario.Flow, responses); err != nil {
 			return err
 		}
 	}
-	if scenario.Behavior != "flow" && (scenario.Count < 0 || scenario.Count > 1000000 || count == 0 || count > 100 || !slices.Contains([]string{"always", "failFirst", "failAfter", "sequence"}, scenario.Behavior)) {
+	if scenario.Behavior != "flow" && scenario.Behavior != "javascript" && (scenario.Count < 0 || scenario.Count > 1000000 || count == 0 || count > 100 || !slices.Contains([]string{"always", "failFirst", "failAfter", "sequence"}, scenario.Behavior)) {
 		return errors.New("invalid scenario behavior, count or response list")
 	}
 	if scenario.Behavior == "always" && count != 1 || (scenario.Behavior == "failFirst" || scenario.Behavior == "failAfter") && count != 2 {

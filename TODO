@@ -1,0 +1,9 @@
+Improve dark theme - the color contrast is not looking good.
+
+4. request interceptor to dynamically run js code and return saved mock responses.
+
+
+1. Support custom status code as well along with brief one line on which scenario it will be used.
+2. I need n8n like visual editor to manage scenarios using the saved responses.
+   - the responses can be used in the node to build a flow.
+3. Import / Export functionality of the project or individual request mocker.

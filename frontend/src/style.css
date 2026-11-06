@@ -1053,6 +1053,37 @@ dialog > p.error {
   font-size: 12px;
   line-height: 1.8;
 }
+.javascript-editor {
+  width: 100%;
+  height: 300px;
+  overflow: hidden;
+  border: 1px solid #dfe6d7;
+  border-radius: 6px;
+}
+.javascript-editor-loading {
+  display: grid;
+  min-height: 300px;
+  place-items: center;
+  border: 1px solid #dfe6d7;
+  border-radius: 6px;
+  color: #7c8878;
+  font-size: 12px;
+}
+.script-response-options {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: #687565;
+  font-size: 12px;
+}
+.script-response-options > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.script-response-options code {
+  color: #47754c;
+}
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2000,6 +2031,14 @@ body:has(.app[data-theme="dark"]) .select-item[data-highlighted] {
 .app[data-theme="dark"] .condition input,
 .app[data-theme="dark"] .condition select {
   caret-color: #9bd4a8;
+}
+.app[data-theme="dark"] .javascript-editor,
+.app[data-theme="dark"] .javascript-editor-loading {
+  border-color: var(--dark-border);
+}
+.app[data-theme="dark"] .javascript-editor-loading,
+.app[data-theme="dark"] .script-response-options {
+  color: var(--dark-muted);
 }
 .app[data-theme="dark"] .flow-viewport {
   border-color: var(--dark-border);

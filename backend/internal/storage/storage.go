@@ -230,6 +230,11 @@ func (s *Store) Match(ctx context.Context, project, environment, session string,
 			if err := saveFlowCursor(ctx, tx, project, environment, session, match, plan); err != nil {
 				return err
 			}
+		} else if match.Scenario.Behavior == "javascript" {
+			plan, err = engine.ResolveJavaScript(match, attempt, request, session, environment)
+			if err != nil {
+				return fmt.Errorf("%w: %v", engine.ErrScriptExecution, err)
+			}
 		} else {
 			plan = engine.Resolve(match, attempt)
 		}

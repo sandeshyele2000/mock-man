@@ -1,4 +1,11 @@
-import { cloneElement, isValidElement, useId, type ReactElement } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  lazy,
+  Suspense,
+  useId,
+  type ReactElement,
+} from "react";
 import {
   useEffect,
   useRef,
@@ -27,7 +34,13 @@ export const behaviors = {
   failFirst: "Fail first N attempts",
   failAfter: "Fail after N attempts",
   sequence: "Response sequence",
+  javascript: "JavaScript",
 };
+const JavaScriptCodeEditor = lazy(() =>
+  import("./JavaScriptCodeEditor").then((module) => ({
+    default: module.JavaScriptCodeEditor,
+  })),
+);
 function Field({
   label,
   children,
@@ -355,11 +368,13 @@ export function ScenarioForm({
   responses,
   onSave,
   busy,
+  theme,
 }: {
   value?: Scenario;
   responses: Response[];
   onSave: (v: Scenario) => void;
   busy: boolean;
+  theme: "light" | "dark";
 }) {
   const [name, setName] = useState(value?.name || "");
   const [behavior, setBehavior] = useState<Scenario["behavior"]>(
@@ -375,6 +390,10 @@ export function ScenarioForm({
   const [priority, setPriority] = useState(value?.priority || 0);
   const [conditions, setConditions] = useState<Condition[]>(
     value?.conditions || [],
+  );
+  const [code, setCode] = useState(
+    value?.code ||
+      'const expiresAt = _.get(request.body, "expiresAt");\nconst expired = expiresAt && moment(expiresAt).isBefore(moment());\nconst chosen = input.responses.find((response) => response.name === (expired ? "Expired" : "Active"));\nreturn { responseId: chosen?.id ?? input.responses[0]?.id };',
   );
   const responseSelect = (i: number, label: string) => (
     <Field key={i} label={label}>
@@ -404,11 +423,12 @@ export function ScenarioForm({
           name,
           revision: value?.revision || "",
           behavior,
-          count,
+          count: behavior === "javascript" ? 0 : count,
           responseIds: ids,
           exhaustion,
           priority,
           conditions,
+          code: behavior === "javascript" ? code : undefined,
         })
       }
     >
@@ -430,10 +450,12 @@ export function ScenarioForm({
             setIds(
               b === "always"
                 ? [responses[0]?.id || ""]
-                : [
-                    responses[0]?.id || "",
-                    responses[1]?.id || responses[0]?.id || "",
-                  ],
+                : b === "javascript"
+                  ? responses.map((response) => response.id)
+                  : [
+                      responses[0]?.id || "",
+                      responses[1]?.id || responses[0]?.id || "",
+                    ],
             );
           }}
           options={Object.entries(behaviors).map(([value, label]) => ({
@@ -468,6 +490,39 @@ export function ScenarioForm({
         </>
       )}
       {behavior === "always" && responseSelect(0, "Response")}
+      {behavior === "javascript" && (
+        <>
+          <Field
+            label="JavaScript code"
+            hint="Available globals: request, input, responses, attempt, session, environment, _, moment. Return { responseId } or { response: { status, headers, body, delayMs } }."
+          >
+            <Suspense
+              fallback={
+                <div className="javascript-editor-loading">
+                  Loading JavaScript editor…
+                </div>
+              }
+            >
+              <JavaScriptCodeEditor
+                value={code}
+                onChange={setCode}
+                theme={theme}
+              />
+            </Suspense>
+          </Field>
+          <div className="script-response-options">
+            <strong>Available responses</strong>
+            {responses.map((response) => (
+              <div key={response.id}>
+                <span>
+                  {response.name} · {response.status}
+                </span>
+                <code>{response.id}</code>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       {behavior === "sequence" && (
         <>
           <div className="sequence">

@@ -379,6 +379,7 @@ components:
             - failAfter
             - sequence
             - flow
+            - javascript
         count:
           type: integer
         responseIds:
@@ -398,6 +399,8 @@ components:
             $ref: '#/components/schemas/Condition'
         flow:
           $ref: '#/components/schemas/FlowGraph'
+        code:
+          type: string
       additionalProperties: false
     FlowGraph:
       type: object

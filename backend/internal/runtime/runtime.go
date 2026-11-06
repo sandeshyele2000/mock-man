@@ -110,6 +110,10 @@ func writeMatchFailure(w http.ResponseWriter, err error) {
 		status = http.StatusBadGateway
 		slog.Error("mock flow execution failed", "error", err)
 		err = errors.New("mock flow execution failed")
+	} else if errors.Is(err, engine.ErrScriptExecution) {
+		status = http.StatusBadGateway
+		slog.Error("mock JavaScript scenario failed", "error", err)
+		err = errors.New("mock JavaScript scenario failed")
 	} else {
 		slog.Error("mock allocation failed", "error", err)
 		err = errors.New("mock storage unavailable")

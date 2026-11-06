@@ -16,6 +16,7 @@ const MaxDelay = 30000
 
 var ErrNoMatch = errors.New("no enabled rule matched method, path and conditions")
 var ErrFlowExecution = errors.New("flow execution failed")
+var ErrScriptExecution = errors.New("JavaScript scenario execution failed")
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$`)
 
@@ -90,6 +91,7 @@ type Scenario struct {
 	Priority    int         `json:"priority"`
 	Conditions  []Condition `json:"conditions"`
 	Flow        *FlowGraph  `json:"flow,omitempty"`
+	Code        string      `json:"code,omitempty"`
 }
 type Request struct {
 	Method, Path, Scenario string
