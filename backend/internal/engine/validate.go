@@ -40,8 +40,8 @@ func validateProject(project Project, seen map[string]bool) error {
 	}
 	featureIDs := map[string]bool{}
 	endpointIDs := map[string]bool{}
-	routes := map[string]bool{}
 	for _, feature := range project.Features {
+		routes := map[string]bool{}
 		if err := validateFeature(feature, featureIDs, endpointIDs, routes, environments); err != nil {
 			return err
 		}

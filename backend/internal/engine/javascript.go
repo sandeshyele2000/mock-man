@@ -37,6 +37,7 @@ var (
 )
 
 type flowRequest struct {
+	Feature  string              `json:"feature"`
 	Method   string              `json:"method"`
 	Path     string              `json:"path"`
 	Scenario string              `json:"scenario"`
@@ -157,7 +158,7 @@ func newFlowInput(request Request, attempt int64, session, environment string, d
 	}
 	return flowInput{
 		Request: flowRequest{
-			Method: request.Method, Path: request.Path, Scenario: request.Scenario,
+			Method: request.Method, Path: request.Path, Scenario: request.Scenario, Feature: request.Feature,
 			Query: request.Query, Headers: request.Headers, Body: request.Body,
 		},
 		Responses: responses,

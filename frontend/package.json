@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite",
     "build": "tsc -b && vite build",
     "generate": "openapi-typescript ../backend/api/openapi.yaml -o src/schema.d.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:appearance": "playwright test --config playwright.appearance.config.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

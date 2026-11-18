@@ -1,5 +1,5 @@
 // Created by Sandesh
-import { ADMIN_HOST, MOCK_HOST, MOCK_PORT, MOCK_SERVER_URL } from "./config";
+import { ADMIN_HOST, MOCK_HOST, MOCK_SERVER_URL } from "./config";
 import {
   Modal,
   EntityForm,
@@ -22,6 +22,7 @@ import {
   Code2,
   Copy,
   Download,
+  Eye,
   Folder,
   Layers,
   Moon,
@@ -53,6 +54,7 @@ import {
   type Log,
 } from "./api";
 import { Button } from "./components/ui/button";
+import { JsonPreview } from "./components/JsonPreview";
 import { SelectField } from "./components/ui/select";
 import { MockmanMark } from "./components/brand";
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
@@ -61,6 +63,7 @@ type ModalState =
   | { kind: "feature"; value?: Feature }
   | { kind: "endpoint"; value?: Endpoint }
   | { kind: "response"; value?: Response }
+  | { kind: "response-view"; value: Response }
   | { kind: "scenario"; value?: Scenario }
   | { kind: "try" };
 export default function App() {
@@ -84,10 +87,12 @@ export default function App() {
   const [error, setError] = useState("");
   const scenarioImportRef = useRef<HTMLInputElement>(null);
   const featureImportRef = useRef<HTMLInputElement>(null);
+  const [importDragging, setImportDragging] = useState(false);
   const c = config.data;
   const p = c?.projects.find((p) => p.id === projectID) || c?.projects[0];
   const f = p?.features.find((f) => f.id === featureID) || p?.features[0];
   const e = f?.endpoints.find((e) => e.id === endpointID) || f?.endpoints[0];
+  const mockingPaused = !!f?.mockingDisabled;
   const env = p?.environments.includes(environment)
     ? environment
     : p?.environments[0] || "development";
@@ -118,6 +123,7 @@ export default function App() {
   }, [notice]);
   useEffect(() => {
     localStorage.setItem("mockman-theme", theme);
+    document.documentElement.dataset.theme = theme;
   }, [theme]);
   function change(
     update: (
@@ -238,8 +244,10 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
   async function importFeature(file?: File) {
-    if (!file || !p) return;
+    if (!file || !p || save.isPending) return;
     try {
+      if (file.size > 2 * 1024 * 1024)
+        throw new Error("Feature file must be at most 2 MiB.");
       const bundle = JSON.parse(await file.text());
       const feature = bundle?.feature as Feature | undefined;
       if (
@@ -549,10 +557,11 @@ export default function App() {
   }
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
   const curl =
-    e && p
+    e && p && f
       ? [
           `curl -i -X ${e.method} ${quote(`${MOCK_SERVER_URL.replace(/\/$/, "")}${encodeURI(e.path)}`)}`,
           `  -H ${quote(`X-Mock-Project: ${p.id}`)}`,
+          `  -H ${quote(`X-Mock-Feature: ${f.id}`)}`,
           `  -H ${quote(`X-Mock-Environment: ${env}`)}`,
         ].join(" \\\n")
       : "";
@@ -619,24 +628,29 @@ export default function App() {
   return (
     <div className="app" data-theme={theme}>
       <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
-        <a className="brand" href="/">
-          <span className="brand-icon">
-            <MockmanMark size={23} />
-          </span>
-        </a>
-        <Button
-          className="sidebar-toggle"
-          variant="ghost"
-          size="icon"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-        >
-          {sidebarCollapsed ? (
-            <PanelLeftOpen size={16} />
-          ) : (
-            <PanelLeftClose size={16} />
-          )}
-        </Button>
+        <div className="sidebar-header">
+          <a className="brand" href="/" aria-label="Mockman home">
+            <span className="brand-icon">
+              <MockmanMark size={23} />
+            </span>
+            <span className="brand-name">Mockman</span>
+          </a>
+          <Button
+            className="sidebar-toggle"
+            variant="ghost"
+            size="icon"
+            aria-label={
+              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={16} />
+            ) : (
+              <PanelLeftClose size={16} />
+            )}
+          </Button>
+        </div>
         {!sidebarCollapsed && (
           <>
             <div className="workspace-label">WORKSPACE</div>
@@ -711,6 +725,7 @@ export default function App() {
                 <div key={feature.id}>
                   <button
                     className={`feature-nav ${f?.id === feature.id ? "selected" : ""}`}
+                    aria-current={f?.id === feature.id ? "page" : undefined}
                     aria-expanded={expandedFeatureID === feature.id}
                     onClick={() => {
                       setFeatureID(feature.id);
@@ -759,17 +774,6 @@ export default function App() {
                 </div>
               ))}
             </nav>
-            <div className="sidebar-bottom">
-              <div className="server-state">
-                <span className="live-dot" />
-                <span>Local workspace</span>
-                <span className="port">:{MOCK_PORT}</span>
-              </div>
-              <div className="version">
-                <span>Mockman</span>
-                <span>v0.1</span>
-              </div>
-            </div>
           </>
         )}
       </aside>
@@ -798,7 +802,6 @@ export default function App() {
             <b>{f?.name || "Features"}</b>
           </div>
           <div className="top-context">
-            <span className="live-dot" />
             <SelectField
               aria-label="Environment"
               value={env}
@@ -830,16 +833,6 @@ export default function App() {
               </h1>
             </div>
             <div className="heading-actions">
-              <input
-                ref={featureImportRef}
-                hidden
-                type="file"
-                accept="application/json,.json"
-                aria-label="Import feature JSON"
-                onChange={(event) =>
-                  void importFeature(event.target.files?.[0])
-                }
-              />
               <Button
                 variant="ghost"
                 size="icon"
@@ -849,15 +842,24 @@ export default function App() {
               >
                 <Download size={15} />
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Import feature"
-                disabled={!p}
-                onClick={() => featureImportRef.current?.click()}
-              >
-                <Upload size={15} />
-              </Button>
+              {f && (
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    aria-label="Feature mocking"
+                    checked={!f.mockingDisabled}
+                    disabled={save.isPending}
+                    onChange={(event) =>
+                      change((_, __, feature) => {
+                        if (feature)
+                          feature.mockingDisabled = !event.target.checked;
+                      })
+                    }
+                  />
+                  <span />
+                  Feature {f.mockingDisabled ? "paused" : "enabled"}
+                </label>
+              )}
               {f && (
                 <>
                   <Button
@@ -891,661 +893,818 @@ export default function App() {
               </Button>
             </div>
           </div>
-          {error && (
-            <div role="alert" className="error banner">
-              {error}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setError("");
-                  void config.refetch();
-                }}
-              >
-                Reload workspace
-              </Button>
-              <button aria-label="Dismiss error" onClick={() => setError("")}>
-                <X size={16} />
-              </button>
-            </div>
-          )}
-          <div className="overview">
-            <div>
-              <span className="stat-icon">
-                <ArrowDownUp size={17} />
-              </span>
-              <span>
-                <small>Endpoints</small>
-                <b>{f?.endpoints.length || 0}</b>
-              </span>
-            </div>
-            <div>
-              <span className="stat-icon">
-                <Zap size={17} />
-              </span>
-              <span>
-                <small>Mocking enabled</small>
-                <b>
-                  {f?.endpoints.filter((v) => v.enabled).length || 0}
-                  <em> ready to intercept</em>
-                </b>
-              </span>
-            </div>
-            <div>
-              <span className="stat-icon">
-                <Activity size={17} />
-              </span>
-              <span>
-                <small>Recent requests</small>
-                <b>
-                  {logs.data?.length || 0}
-                  <em> in {env}</em>
-                </b>
-              </span>
-            </div>
-          </div>
-          <motion.div
-            key={e?.id || "empty-workspace"}
-            className="content-grid"
-            initial={{ opacity: 0, y: 7 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+          <div
+            className="workspace-content"
+            role="region"
+            aria-label="Feature content"
+            tabIndex={0}
           >
-            <section className="endpoint-list panel">
-              <div className="panel-heading">
-                <h2>
-                  Endpoints <span>{f?.endpoints.length || 0}</span>
-                </h2>
-                <MoreHorizontal size={18} />
+            {error && (
+              <div role="alert" className="error banner">
+                {error}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setError("");
+                    void config.refetch();
+                  }}
+                >
+                  Reload workspace
+                </Button>
+                <button aria-label="Dismiss error" onClick={() => setError("")}>
+                  <X size={16} />
+                </button>
               </div>
-              <div className="search">
-                <Search size={15} />
-                <input
-                  aria-label="Search endpoints"
-                  placeholder="Search endpoints…"
-                  value={search}
-                  onChange={(ev) => setSearch(ev.target.value)}
-                />
-                <kbd>⌕</kbd>
+            )}
+            {mockingPaused && (
+              <div className="mocking-pause-banner" role="status">
+                <div>
+                  <b>Feature mocking is paused</b>
+                  <p>
+                    Requests return 404. Your endpoint settings and scenario
+                    progress are preserved.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={save.isPending}
+                  onClick={() => {
+                    change((_, __, feature) => {
+                      if (feature) feature.mockingDisabled = false;
+                    });
+                  }}
+                >
+                  <Play size={14} />
+                  Resume mocking
+                </Button>
               </div>
-              <div className="endpoint-items">
-                {f?.endpoints
-                  .filter((v) =>
-                    (v.name + v.path + v.method)
-                      .toLowerCase()
-                      .includes(search.toLowerCase()),
-                  )
-                  .map((v) => (
+            )}
+            <div className="overview">
+              <div>
+                <span className="stat-icon">
+                  <ArrowDownUp size={17} />
+                </span>
+                <span>
+                  <small>Endpoints</small>
+                  <b>{f?.endpoints.length || 0}</b>
+                </span>
+              </div>
+              <div>
+                <span className="stat-icon">
+                  <Zap size={17} />
+                </span>
+                <span>
+                  <small>Mocking enabled</small>
+                  <b>
+                    {mockingPaused
+                      ? 0
+                      : f?.endpoints.filter((v) => v.enabled).length || 0}
+                    <em> ready to intercept</em>
+                  </b>
+                </span>
+              </div>
+              <div>
+                <span className="stat-icon">
+                  <Activity size={17} />
+                </span>
+                <span>
+                  <small>Recent requests</small>
+                  <b>
+                    {logs.data?.length || 0}
+                    <em> in {env}</em>
+                  </b>
+                </span>
+              </div>
+            </div>
+            <motion.div
+              key={e?.id || "empty-workspace"}
+              className="content-grid"
+              initial={{ opacity: 0, y: 7 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <section className="endpoint-list panel">
+                <div className="panel-heading">
+                  <h2>
+                    Endpoints <span>{f?.endpoints.length || 0}</span>
+                  </h2>
+                  <MoreHorizontal size={18} />
+                </div>
+                <div className="search">
+                  <Search size={15} />
+                  <input
+                    aria-label="Search endpoints"
+                    placeholder="Search endpoints…"
+                    value={search}
+                    onChange={(ev) => setSearch(ev.target.value)}
+                  />
+                  {search && (
                     <button
-                      key={v.id}
-                      className={`endpoint-item ${e?.id === v.id ? "active" : ""}`}
-                      onClick={() => setEndpointID(v.id)}
+                      className="search-clear"
+                      aria-label="Clear endpoint search"
+                      onClick={() => setSearch("")}
                     >
-                      <div>
-                        <span className={`method ${v.method.toLowerCase()}`}>
-                          {v.method}
-                        </span>
-                        <span
-                          className={v.enabled ? "enabled-dot" : "disabled-dot"}
-                        />
-                      </div>
-                      <b>{v.name}</b>
-                      <code>{v.path}</code>
-                      <small>
-                        {v.scenarios.length} scenario
-                        {v.scenarios.length !== 1 ? "s" : ""}
-                        <ChevronRight size={13} />
-                      </small>
+                      <X size={14} />
                     </button>
-                  ))}
-                {!f?.endpoints.length && (
-                  <div className="empty compact">
-                    <Code2 />
-                    <h3>No endpoints yet</h3>
-                    <p>Add your first method and API path.</p>
-                  </div>
-                )}
-              </div>
-            </section>
-            <section className="endpoint-detail panel">
-              {e ? (
-                <>
-                  <div className="detail-heading">
-                    <div className="route">
-                      <span className={`method ${e.method.toLowerCase()}`}>
-                        {e.method}
-                      </span>
-                      <code>{e.path}</code>
-                    </div>
-                    <div className="detail-tools">
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          aria-label="Mocking enabled"
-                          checked={e.enabled}
-                          disabled={save.isPending}
-                          onChange={(ev) =>
-                            change((_, __, ___, e) => {
-                              e!.enabled = ev.target.checked;
-                            })
-                          }
-                        />
-                        <span />
-                        {e.enabled ? "Mocking on" : "Mocking off"}
-                      </label>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Edit endpoint"
-                        onClick={() => setModal({ kind: "endpoint", value: e })}
-                      >
-                        <Pencil size={15} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Delete endpoint"
-                        onClick={() =>
-                          remove("endpoint", e.name, (_, __, f) => {
-                            f!.endpoints = f!.endpoints.filter(
-                              (v) => v.id !== e.id,
-                            );
-                          })
-                        }
-                      >
-                        <Trash2 size={15} />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="detail-subheading">
-                    <h2>{e.name}</h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setModal({ kind: "try" })}
-                    >
-                      <Play size={13} />
-                      Try request
-                    </Button>
-                  </div>
-                  <div className="tabs" role="tablist">
-                    {[
-                      ["responses", "Responses", e.responses.length],
-                      ["scenarios", "Scenarios", e.scenarios.length],
-                      [
-                        "logs",
-                        "Request logs",
-                        logs.data?.filter((v) => v.detail.endpoint === e.id)
-                          .length || 0,
-                      ],
-                      ["connect", "Connect", null],
-                    ].map(([v, label, n]) => (
+                  )}
+                </div>
+                <div className="endpoint-items">
+                  {f?.endpoints
+                    .filter((v) =>
+                      (v.name + v.path + v.method)
+                        .toLowerCase()
+                        .includes(search.toLowerCase()),
+                    )
+                    .map((v) => (
                       <button
-                        key={v}
-                        role="tab"
-                        aria-selected={tab === v}
-                        className={tab === v ? "selected" : ""}
-                        onClick={() => setTab(String(v))}
+                        key={v.id}
+                        className={`endpoint-item ${e?.id === v.id ? "active" : ""}`}
+                        aria-current={e?.id === v.id ? "true" : undefined}
+                        onClick={() => setEndpointID(v.id)}
                       >
-                        {label}
-                        {n !== null && <span>{n}</span>}
+                        <div>
+                          <span className={`method ${v.method.toLowerCase()}`}>
+                            {v.method}
+                          </span>
+                          <span
+                            className={
+                              v.enabled && !mockingPaused
+                                ? "enabled-dot"
+                                : "disabled-dot"
+                            }
+                          />
+                        </div>
+                        <b>{v.name}</b>
+                        <code>{v.path}</code>
+                        <small>
+                          {v.scenarios.length} scenario
+                          {v.scenarios.length !== 1 ? "s" : ""}
+                          <ChevronRight size={13} />
+                        </small>
                       </button>
                     ))}
-                  </div>
-                  <div className="tab-content">
-                    {tab === "responses" && (
-                      <>
-                        <div className="section-heading">
-                          <div>
-                            <h3>Named responses</h3>
-                            <p>The building blocks for every scenario.</p>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setModal({ kind: "response" })}
-                          >
-                            <Plus size={14} />
-                            Add response
-                          </Button>
-                        </div>
-                        <label className="list-search">
-                          <Search size={14} aria-hidden="true" />
+                  {!!f?.endpoints.length &&
+                    !f.endpoints.some((endpoint) =>
+                      (endpoint.name + endpoint.path + endpoint.method)
+                        .toLowerCase()
+                        .includes(search.toLowerCase()),
+                    ) && (
+                      <div className="empty compact">
+                        <Search size={22} />
+                        <h3>No matching endpoints</h3>
+                        <p>Try a method, name, or API path.</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSearch("")}
+                        >
+                          Clear search
+                        </Button>
+                      </div>
+                    )}
+                  {!f?.endpoints.length && (
+                    <div className="empty compact">
+                      <Code2 />
+                      <h3>No endpoints yet</h3>
+                      <p>Add your first method and API path.</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+              <section className="endpoint-detail panel">
+                {e ? (
+                  <>
+                    <div className="detail-heading">
+                      <div className="route">
+                        <span className={`method ${e.method.toLowerCase()}`}>
+                          {e.method}
+                        </span>
+                        <code>{e.path}</code>
+                      </div>
+                      <div className="detail-tools">
+                        <label className="toggle">
                           <input
-                            type="search"
-                            aria-label="Search responses"
-                            placeholder="Search responses…"
-                            value={responseSearch}
-                            onChange={(event) =>
-                              setResponseSearch(event.target.value)
+                            type="checkbox"
+                            aria-label="Mocking enabled"
+                            checked={e.enabled}
+                            disabled={save.isPending}
+                            onChange={(ev) =>
+                              change((_, __, ___, e) => {
+                                e!.enabled = ev.target.checked;
+                              })
                             }
                           />
+                          <span />
+                          {e.enabled
+                            ? mockingPaused
+                              ? "Mocking paused"
+                              : "Mocking on"
+                            : "Mocking off"}
                         </label>
-                        {filteredResponses.map((r) => (
-                          <article className="response-card" key={r.id}>
-                            <div className="card-heading">
-                              <div>
-                                <span
-                                  className={`status ${r.status >= 400 ? "failure" : "success"}`}
-                                >
-                                  {r.status}
-                                </span>
-                                <b>{r.name}</b>
-                              </div>
-                              <div>
-                                <span className="delay">
-                                  {r.delayMs.toLocaleString()} ms
-                                </span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Edit response ${r.name}`}
-                                  onClick={() =>
-                                    setModal({ kind: "response", value: r })
-                                  }
-                                >
-                                  <Pencil size={13} />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Delete response ${r.name}`}
-                                  onClick={() =>
-                                    remove(
-                                      "response",
-                                      r.name,
-                                      (_, __, ___, e) => {
-                                        e!.responses = e!.responses.filter(
-                                          (v) => v.id !== r.id,
-                                        );
-                                      },
-                                    )
-                                  }
-                                >
-                                  <Trash2 size={13} />
-                                </Button>
-                              </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Edit endpoint"
+                          onClick={() =>
+                            setModal({ kind: "endpoint", value: e })
+                          }
+                        >
+                          <Pencil size={15} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Delete endpoint"
+                          onClick={() =>
+                            remove("endpoint", e.name, (_, __, f) => {
+                              f!.endpoints = f!.endpoints.filter(
+                                (v) => v.id !== e.id,
+                              );
+                            })
+                          }
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="detail-subheading">
+                      <h2>{e.name}</h2>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setModal({ kind: "try" })}
+                      >
+                        <Play size={13} />
+                        Try request
+                      </Button>
+                    </div>
+                    <div className="tabs" role="tablist">
+                      {[
+                        ["responses", "Responses", e.responses.length],
+                        ["scenarios", "Scenarios", e.scenarios.length],
+                        [
+                          "logs",
+                          "Request logs",
+                          logs.data?.filter((v) => v.detail.endpoint === e.id)
+                            .length || 0,
+                        ],
+                        ["connect", "Connect", null],
+                      ].map(([v, label, n]) => (
+                        <button
+                          key={v}
+                          role="tab"
+                          aria-selected={tab === v}
+                          className={tab === v ? "selected" : ""}
+                          onClick={() => setTab(String(v))}
+                        >
+                          {label}
+                          {n !== null && <span>{n}</span>}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="tab-content">
+                      {tab === "responses" && (
+                        <>
+                          <div className="section-heading">
+                            <div>
+                              <h3>Named responses</h3>
+                              <p>The building blocks for every scenario.</p>
                             </div>
-                            <pre>{pretty(r.body)}</pre>
-                            <div className="card-footer">
-                              <span>
-                                <Code2 size={12} /> JSON
-                              </span>
-                              <span>
-                                {Object.keys(r.headers).length} header
-                                {Object.keys(r.headers).length !== 1 ? "s" : ""}
-                              </span>
-                            </div>
-                          </article>
-                        ))}
-                        {e.responses.length === 0 && (
-                          <div className="empty">
-                            <Code2 />
-                            <h3>Give this endpoint a response</h3>
-                            <p>
-                              Define a status, JSON body and optional delay.
-                            </p>
-                          </div>
-                        )}
-                        {e.responses.length > 0 &&
-                          filteredResponses.length === 0 && (
-                            <div className="empty list-empty">
-                              <Search />
-                              <h3>No matching responses</h3>
-                              <p>Try a different search term.</p>
-                            </div>
-                          )}
-                      </>
-                    )}
-                    {tab === "scenarios" && (
-                      <>
-                        <div className="section-heading">
-                          <div>
-                            <h3>Response behavior</h3>
-                            <p>Choose what happens on each attempt.</p>
-                          </div>
-                          <div className="scenario-import-actions">
-                            <input
-                              ref={scenarioImportRef}
-                              hidden
-                              type="file"
-                              accept="application/json,.json"
-                              aria-label="Import scenario JSON"
-                              onChange={(event) =>
-                                void importScenario(event.target.files?.[0])
-                              }
-                            />
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => scenarioImportRef.current?.click()}
-                            >
-                              <Upload size={14} />
-                              Import
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={!e.responses.length}
-                              onClick={() => setModal({ kind: "scenario" })}
+                              onClick={() => setModal({ kind: "response" })}
                             >
                               <Plus size={14} />
-                              Add scenario
+                              Add response
                             </Button>
                           </div>
-                        </div>
-                        <label className="list-search">
-                          <Search size={14} aria-hidden="true" />
-                          <input
-                            type="search"
-                            aria-label="Search scenarios"
-                            placeholder="Search scenarios…"
-                            value={scenarioSearch}
-                            onChange={(event) =>
-                              setScenarioSearch(event.target.value)
-                            }
-                          />
-                        </label>
-                        {filteredScenarios.map((s) => (
-                          <article
-                            className={`scenario-card ${s.id === active?.id ? "is-active" : ""}`}
-                            key={s.id}
-                          >
-                            <div className="card-heading">
-                              <div>
-                                <span className="scenario-icon">
-                                  <Zap size={16} />
-                                </span>
-                                <b>{s.name}</b>
-                                {s.id === active?.id && (
-                                  <span className="active-badge">ACTIVE</span>
-                                )}
-                              </div>
-                              <div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Export scenario ${s.name}`}
-                                  onClick={() => exportScenario(s)}
-                                >
-                                  <Download size={14} />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Edit scenario ${s.name}`}
-                                  disabled={
-                                    !Object.hasOwn(behaviors, s.behavior)
-                                  }
-                                  onClick={() =>
-                                    setModal({ kind: "scenario", value: s })
-                                  }
-                                >
-                                  <Pencil size={14} />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={`Delete scenario ${s.name}`}
-                                  onClick={() =>
-                                    remove(
-                                      "scenario",
-                                      s.name,
-                                      (_, __, ___, e) => {
-                                        e!.scenarios = e!.scenarios.filter(
-                                          (v) => v.id !== s.id,
-                                        );
-                                        for (const env of Object.keys(
-                                          e!.active,
-                                        )) {
-                                          if (e!.active[env] === s.id)
-                                            delete e!.active[env];
-                                        }
-                                      },
-                                    )
-                                  }
-                                >
-                                  <Trash2 size={14} />
-                                </Button>
-                              </div>
-                            </div>
-                            <p>
-                              {behaviors[
-                                s.behavior as keyof typeof behaviors
-                              ] ?? "Visual flow (view only)"}
-                              {["failFirst", "failAfter"].includes(
-                                s.behavior,
-                              ) && <b> · N = {s.count}</b>}
-                              {s.behavior === "sequence" &&
-                                ` · ${s.exhaustion === "loop" ? "Loop" : "Repeat final"}`}
-                            </p>
-                            <div className="response-flow">
-                              {s.responseIds.map((rid, i) => {
-                                const isNext =
-                                  s.id === active?.id &&
-                                  s.behavior !== "flow" &&
-                                  s.behavior !== "javascript" &&
-                                  i === nextResponseIndex(s);
-                                return (
+                          <label className="list-search">
+                            <Search size={14} aria-hidden="true" />
+                            <input
+                              type="search"
+                              aria-label="Search responses"
+                              placeholder="Search responses…"
+                              value={responseSearch}
+                              onChange={(event) =>
+                                setResponseSearch(event.target.value)
+                              }
+                            />
+                          </label>
+                          {filteredResponses.map((r) => (
+                            <article className="response-card" key={r.id}>
+                              <div className="card-heading">
+                                <div>
                                   <span
-                                    className={isNext ? "is-next" : undefined}
-                                    key={i}
+                                    className={`status ${r.status >= 400 ? "failure" : "success"}`}
                                   >
-                                    {i > 0 && <ArrowRight size={13} />}
-                                    <code>
-                                      {
-                                        e.responses.find((r) => r.id === rid)
-                                          ?.name
-                                      }
-                                    </code>
-                                    {isNext && (
-                                      <small className="step-state">NEXT</small>
-                                    )}
+                                    {r.status}
                                   </span>
-                                );
-                              })}
-                            </div>
-                            {s.conditions.length > 0 && (
-                              <p className="conditions-preview">
-                                {s.conditions
-                                  .map(
-                                    (c) => `${c.source}.${c.key} = ${c.value}`,
-                                  )
-                                  .join(" AND ")}{" "}
-                                · priority {s.priority}
+                                  <b>{r.name}</b>
+                                </div>
+                                <div>
+                                  <span className="delay">
+                                    {r.delayMs.toLocaleString()} ms
+                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`View response ${r.name}`}
+                                    onClick={() =>
+                                      setModal({
+                                        kind: "response-view",
+                                        value: r,
+                                      })
+                                    }
+                                  >
+                                    <Eye size={15} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Edit response ${r.name}`}
+                                    onClick={() =>
+                                      setModal({ kind: "response", value: r })
+                                    }
+                                  >
+                                    <Pencil size={13} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Delete response ${r.name}`}
+                                    onClick={() =>
+                                      remove(
+                                        "response",
+                                        r.name,
+                                        (_, __, ___, e) => {
+                                          e!.responses = e!.responses.filter(
+                                            (v) => v.id !== r.id,
+                                          );
+                                        },
+                                      )
+                                    }
+                                  >
+                                    <Trash2 size={13} />
+                                  </Button>
+                                </div>
+                              </div>
+                              <JsonPreview text={pretty(r.body)} />
+                              <div className="card-footer">
+                                <span>
+                                  <Code2 size={12} /> JSON
+                                </span>
+                                <span>
+                                  {Object.keys(r.headers).length} header
+                                  {Object.keys(r.headers).length !== 1
+                                    ? "s"
+                                    : ""}
+                                </span>
+                              </div>
+                            </article>
+                          ))}
+                          {e.responses.length === 0 && (
+                            <div className="empty">
+                              <Code2 />
+                              <h3>Give this endpoint a response</h3>
+                              <p>
+                                Define a status, JSON body and optional delay.
                               </p>
+                            </div>
+                          )}
+                          {e.responses.length > 0 &&
+                            filteredResponses.length === 0 && (
+                              <div className="empty list-empty">
+                                <Search />
+                                <h3>No matching responses</h3>
+                                <p>Try a different search term.</p>
+                              </div>
                             )}
-                            <div className="scenario-footer">
-                              <small>Revision {s.revision.slice(0, 8)}</small>
-                              <Button
-                                variant={
-                                  s.id === active?.id ? "ghost" : "outline"
+                        </>
+                      )}
+                      {tab === "scenarios" && (
+                        <>
+                          <div className="section-heading">
+                            <div>
+                              <h3>Response behavior</h3>
+                              <p>Choose what happens on each attempt.</p>
+                            </div>
+                            <div className="scenario-import-actions">
+                              <input
+                                ref={scenarioImportRef}
+                                hidden
+                                type="file"
+                                accept="application/json,.json"
+                                aria-label="Import scenario JSON"
+                                onChange={(event) =>
+                                  void importScenario(event.target.files?.[0])
                                 }
+                              />
+                              <Button
+                                variant="outline"
                                 size="sm"
-                                disabled={save.isPending || s.id === active?.id}
                                 onClick={() =>
-                                  change((_, __, ___, e) => {
-                                    e!.active[env] = s.id;
-                                  })
+                                  scenarioImportRef.current?.click()
                                 }
                               >
-                                {s.id === active?.id ? (
-                                  <>
-                                    <Check size={13} />
-                                    Active in {env}
-                                  </>
-                                ) : (
-                                  "Activate scenario"
-                                )}
+                                <Upload size={14} />
+                                Import
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!e.responses.length}
+                                onClick={() => setModal({ kind: "scenario" })}
+                              >
+                                <Plus size={14} />
+                                Add scenario
                               </Button>
                             </div>
-                          </article>
-                        ))}
-                        {e.scenarios.length === 0 && (
-                          <div className="empty">
-                            <Zap />
-                            <h3>No scenario selected</h3>
-                            <p>
-                              {e.responses.length
-                                ? "Add a scenario to start serving requests."
-                                : "Add a response first, then define its behavior."}
-                            </p>
                           </div>
-                        )}
-                        {e.scenarios.length > 0 &&
-                          filteredScenarios.length === 0 && (
-                            <div className="empty list-empty">
-                              <Search />
-                              <h3>No matching scenarios</h3>
-                              <p>Try a different search term.</p>
-                            </div>
-                          )}
-                      </>
-                    )}
-                    {tab === "logs" && (
-                      <>
-                        <div className="section-heading">
-                          <div>
-                            <h3>Request activity</h3>
-                            <p>Matched requests · refreshes every 2 seconds</p>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void logs.refetch()}
-                          >
-                            <RotateCcw size={13} />
-                            Refresh
-                          </Button>
-                        </div>
-                        {logs.isError && (
-                          <p className="error" role="alert">
-                            Could not load logs: {logs.error.message}
-                          </p>
-                        )}
-                        <div className="log-list">
-                          {logs.data
-                            ?.filter((v) => v.detail.endpoint === e.id)
-                            .map((l) => (
-                              <details key={l.id} className="log-row">
-                                <summary>
-                                  <span
-                                    className={`status ${l.detail.status >= 400 ? "failure" : "success"}`}
-                                  >
-                                    {l.detail.status}
+                          <label className="list-search">
+                            <Search size={14} aria-hidden="true" />
+                            <input
+                              type="search"
+                              aria-label="Search scenarios"
+                              placeholder="Search scenarios…"
+                              value={scenarioSearch}
+                              onChange={(event) =>
+                                setScenarioSearch(event.target.value)
+                              }
+                            />
+                          </label>
+                          {filteredScenarios.map((s) => (
+                            <article
+                              className={`scenario-card ${s.id === active?.id ? "is-active" : ""}`}
+                              key={s.id}
+                            >
+                              <div className="card-heading">
+                                <div>
+                                  <span className="scenario-icon">
+                                    <Zap size={16} />
                                   </span>
-                                  <b>Attempt {l.detail.attempt}</b>
-                                  <span>{l.detail.delayMs} ms</span>
-                                  <time>
-                                    {new Date(l.createdAt).toLocaleTimeString()}
-                                  </time>
-                                  <ChevronDown size={13} />
-                                </summary>
-                                <dl>
-                                  <dt>Scenario</dt>
-                                  <dd>{l.detail.scenario}</dd>
-                                  <dt>Revision</dt>
-                                  <dd>{l.detail.revision}</dd>
-                                  <dt>Matched rule</dt>
-                                  <dd>{l.detail.reason}</dd>
-                                </dl>
-                              </details>
-                            ))}
-                        </div>
-                        {!logs.isPending &&
-                          !logs.data?.some(
-                            (v) => v.detail.endpoint === e.id,
-                          ) && (
-                            <div className="empty">
-                              <Activity />
-                              <h3>Waiting for your first request</h3>
+                                  <b>{s.name}</b>
+                                  {s.id === active?.id && (
+                                    <span className="active-badge">ACTIVE</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Export scenario ${s.name}`}
+                                    onClick={() => exportScenario(s)}
+                                  >
+                                    <Download size={14} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Edit scenario ${s.name}`}
+                                    disabled={
+                                      !Object.hasOwn(behaviors, s.behavior)
+                                    }
+                                    onClick={() =>
+                                      setModal({ kind: "scenario", value: s })
+                                    }
+                                  >
+                                    <Pencil size={14} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Delete scenario ${s.name}`}
+                                    onClick={() =>
+                                      remove(
+                                        "scenario",
+                                        s.name,
+                                        (_, __, ___, e) => {
+                                          e!.scenarios = e!.scenarios.filter(
+                                            (v) => v.id !== s.id,
+                                          );
+                                          for (const env of Object.keys(
+                                            e!.active,
+                                          )) {
+                                            if (e!.active[env] === s.id)
+                                              delete e!.active[env];
+                                          }
+                                        },
+                                      )
+                                    }
+                                  >
+                                    <Trash2 size={14} />
+                                  </Button>
+                                </div>
+                              </div>
                               <p>
-                                Use Try request or call the mock listener from
-                                your app.
+                                {behaviors[
+                                  s.behavior as keyof typeof behaviors
+                                ] ?? "Visual flow (view only)"}
+                                {["failFirst", "failAfter"].includes(
+                                  s.behavior,
+                                ) && <b> · N = {s.count}</b>}
+                                {s.behavior === "sequence" &&
+                                  ` · ${s.exhaustion === "loop" ? "Loop" : "Repeat final"}`}
+                              </p>
+                              <div className="response-flow">
+                                {s.responseIds.map((rid, i) => {
+                                  const isNext =
+                                    s.id === active?.id &&
+                                    s.behavior !== "flow" &&
+                                    s.behavior !== "javascript" &&
+                                    i === nextResponseIndex(s);
+                                  return (
+                                    <span
+                                      className={isNext ? "is-next" : undefined}
+                                      key={i}
+                                    >
+                                      {i > 0 && <ArrowRight size={13} />}
+                                      <code>
+                                        {
+                                          e.responses.find((r) => r.id === rid)
+                                            ?.name
+                                        }
+                                      </code>
+                                      {isNext && (
+                                        <small className="step-state">
+                                          NEXT
+                                        </small>
+                                      )}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              {s.conditions.length > 0 && (
+                                <p className="conditions-preview">
+                                  {s.conditions
+                                    .map(
+                                      (c) =>
+                                        `${c.source}.${c.key} = ${c.value}`,
+                                    )
+                                    .join(" AND ")}{" "}
+                                  · priority {s.priority}
+                                </p>
+                              )}
+                              <div className="scenario-footer">
+                                <small>Revision {s.revision.slice(0, 8)}</small>
+                                <Button
+                                  variant={
+                                    s.id === active?.id ? "ghost" : "outline"
+                                  }
+                                  size="sm"
+                                  disabled={
+                                    save.isPending || s.id === active?.id
+                                  }
+                                  onClick={() =>
+                                    change((_, __, ___, e) => {
+                                      e!.active[env] = s.id;
+                                    })
+                                  }
+                                >
+                                  {s.id === active?.id ? (
+                                    <>
+                                      <Check size={13} />
+                                      Active in {env}
+                                    </>
+                                  ) : (
+                                    "Activate scenario"
+                                  )}
+                                </Button>
+                              </div>
+                            </article>
+                          ))}
+                          {e.scenarios.length === 0 && (
+                            <div className="empty">
+                              <Zap />
+                              <h3>No scenario selected</h3>
+                              <p>
+                                {e.responses.length
+                                  ? "Add a scenario to start serving requests."
+                                  : "Add a response first, then define its behavior."}
                               </p>
                             </div>
                           )}
-                        <p className="footnote">
-                          Logs record the allocated response before delay.
-                          Disconnected requests still consume their attempt.
-                        </p>
-                      </>
-                    )}
-                    {tab === "connect" && (
-                      <>
-                        <div className="section-heading">
-                          <div>
-                            <h3>Connect your application</h3>
-                            <p>Keep your original path. Change the origin.</p>
+                          {e.scenarios.length > 0 &&
+                            filteredScenarios.length === 0 && (
+                              <div className="empty list-empty">
+                                <Search />
+                                <h3>No matching scenarios</h3>
+                                <p>Try a different search term.</p>
+                              </div>
+                            )}
+                        </>
+                      )}
+                      {tab === "logs" && (
+                        <>
+                          <div className="section-heading">
+                            <div>
+                              <h3>Request activity</h3>
+                              <p>
+                                Matched requests · refreshes every 2 seconds
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void logs.refetch()}
+                            >
+                              <RotateCcw size={13} />
+                              Refresh
+                            </Button>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void copyCurl()}
-                          >
-                            <Copy size={13} />
-                            Copy curl
-                          </Button>
-                        </div>
-                        <pre className="curl">{curl}</pre>
-                        <div className="info-box">
-                          <Server size={18} />
-                          <div>
-                            <b>Two listeners, one workspace</b>
-                            <p>
-                              Admin API: {ADMIN_HOST}
-                              <br />
-                              Mock API: {MOCK_HOST}
+                          {logs.isError && (
+                            <p className="error" role="alert">
+                              Could not load logs: {logs.error.message}
                             </p>
-                            <p>
-                              Set MOCK_ADDR=0.0.0.0:{MOCK_PORT} for a physical
-                              device. Use your computer’s LAN address. Keep real
-                              credentials out of mock requests.
-                            </p>
+                          )}
+                          <div className="log-list">
+                            {logs.data
+                              ?.filter((v) => v.detail.endpoint === e.id)
+                              .map((l) => (
+                                <details key={l.id} className="log-row">
+                                  <summary>
+                                    <span
+                                      className={`status ${l.detail.status >= 400 ? "failure" : "success"}`}
+                                    >
+                                      {l.detail.status}
+                                    </span>
+                                    <b>Attempt {l.detail.attempt}</b>
+                                    <span>{l.detail.delayMs} ms</span>
+                                    <time>
+                                      {new Date(
+                                        l.createdAt,
+                                      ).toLocaleTimeString()}
+                                    </time>
+                                    <ChevronDown size={13} />
+                                  </summary>
+                                  <dl>
+                                    <dt>Request</dt>
+                                    <dd>
+                                      <code>
+                                        {l.detail.method} {l.detail.path}
+                                      </code>
+                                    </dd>
+                                    <dt>Session</dt>
+                                    <dd>{l.detail.session}</dd>
+                                    {l.detail.feature && (
+                                      <>
+                                        <dt>Feature</dt>
+                                        <dd>{l.detail.feature}</dd>
+                                      </>
+                                    )}
+                                    <dt>Scenario</dt>
+                                    <dd>{l.detail.scenario}</dd>
+                                    <dt>Revision</dt>
+                                    <dd>{l.detail.revision}</dd>
+                                    <dt>Matched rule</dt>
+                                    <dd>{l.detail.reason}</dd>
+                                  </dl>
+                                  <section
+                                    className="log-payload"
+                                    aria-label="Request payload"
+                                  >
+                                    <div className="log-payload-heading">
+                                      <h4>Request payload</h4>
+                                      {l.detail.payload && (
+                                        <span>
+                                          {l.detail.payload.sizeBytes.toLocaleString()}{" "}
+                                          bytes
+                                          {l.detail.payload.contentType
+                                            ? ` · ${l.detail.payload.contentType}`
+                                            : ""}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {!l.detail.payload ? (
+                                      <p>
+                                        Payload was not recorded for this
+                                        request.
+                                      </p>
+                                    ) : l.detail.payload.sizeBytes === 0 ? (
+                                      <p>No request body.</p>
+                                    ) : (
+                                      <>
+                                        {l.detail.payload.encoding ===
+                                          "base64" && (
+                                          <p>
+                                            Binary payload · displayed as
+                                            base64.
+                                          </p>
+                                        )}
+                                        {l.detail.payload.truncated && (
+                                          <p className="payload-truncated">
+                                            Showing the first 64 KiB at most.
+                                            The full request body was used for
+                                            matching.
+                                          </p>
+                                        )}
+                                        <JsonPreview
+                                          text={l.detail.payload.body}
+                                        />
+                                      </>
+                                    )}
+                                  </section>
+                                </details>
+                              ))}
                           </div>
-                        </div>
-                      </>
-                    )}
+                          {!logs.isPending &&
+                            !logs.data?.some(
+                              (v) => v.detail.endpoint === e.id,
+                            ) && (
+                              <div className="empty">
+                                <Activity />
+                                <h3>Waiting for your first request</h3>
+                                <p>
+                                  Use Try request or call the mock listener from
+                                  your app.
+                                </p>
+                              </div>
+                            )}
+                          <p className="footnote">
+                            Logs record the allocated response before delay.
+                            Disconnected requests still consume their attempt.
+                          </p>
+                        </>
+                      )}
+                      {tab === "connect" && (
+                        <>
+                          <div className="section-heading">
+                            <div>
+                              <h3>Connect your application</h3>
+                              <p>Keep your original path. Change the origin.</p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void copyCurl()}
+                            >
+                              <Copy size={13} />
+                              Copy curl
+                            </Button>
+                          </div>
+                          <pre className="curl">{curl}</pre>
+                          <div className="info-box">
+                            <Server size={18} />
+                            <div>
+                              <b>Two listeners, one workspace</b>
+                              <p>
+                                Admin API: {ADMIN_HOST}
+                                <br />
+                                Mock API: {MOCK_HOST}
+                              </p>
+                              <p>
+                                Set PUBLIC_HOST to your computer’s LAN or VPN
+                                address and BIND_ADDRESS=0.0.0.0 for remote
+                                devices. Keep real credentials out of mock
+                                requests.
+                              </p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="detail-bottom">
+                      <span className="live-dot" />
+                      <span>
+                        {active ? active.name : "No active scenario"}
+                        <small> in {env}</small>
+                      </span>
+                      <span className="saved">
+                        <Check size={12} />
+                        Saved configuration
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="empty large">
+                    <MockmanMark size={36} />
+                    <h3>
+                      {p ? "Build your first mock API" : "Welcome to Mockman"}
+                    </h3>
+                    <p>
+                      {f
+                        ? "Create an endpoint to configure responses and scenarios."
+                        : p
+                          ? "Create a feature to group related endpoints."
+                          : "Create a project to organize your API workspace."}
+                    </p>
+                    <Button
+                      onClick={() =>
+                        setModal({
+                          kind: !p ? "project" : !f ? "feature" : "endpoint",
+                        })
+                      }
+                    >
+                      <Plus size={15} />
+                      Create {!p ? "project" : !f ? "feature" : "endpoint"}
+                    </Button>
                   </div>
-                  <div className="detail-bottom">
-                    <span className="live-dot" />
-                    <span>
-                      {active ? active.name : "No active scenario"}
-                      <small> in {env}</small>
-                    </span>
-                    <span className="saved">
-                      <Check size={12} />
-                      Saved configuration
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="empty large">
-                  <MockmanMark size={36} />
-                  <h3>
-                    {p ? "Build your first mock API" : "Welcome to Mockman"}
-                  </h3>
-                  <p>
-                    {f
-                      ? "Create an endpoint to configure responses and scenarios."
-                      : p
-                        ? "Create a feature to group related endpoints."
-                        : "Create a project to organize your API workspace."}
-                  </p>
-                  <Button
-                    onClick={() =>
-                      setModal({
-                        kind: !p ? "project" : !f ? "feature" : "endpoint",
-                      })
-                    }
-                  >
-                    <Plus size={15} />
-                    Create {!p ? "project" : !f ? "feature" : "endpoint"}
-                  </Button>
-                </div>
-              )}
-            </section>
-          </motion.div>
+                )}
+              </section>
+            </motion.div>
+          </div>
         </main>
       </div>
       {notice && (
@@ -1556,7 +1715,12 @@ export default function App() {
       )}
       {modal && (
         <Modal
-          title={`${modal.kind === "try" ? "Try request" : `${modal.value ? "Edit" : "Create"} ${modal.kind}`}`}
+          title={
+            modal.kind === "response-view"
+              ? modal.value.name
+              : `${modal.kind === "try" ? "Try request" : `${modal.value ? "Edit" : "Create"} ${modal.kind}`}`
+          }
+          wide={modal.kind === "response-view" || modal.kind === "response"}
           onClose={() => setModal(null)}
         >
           {error && (
@@ -1576,6 +1740,108 @@ export default function App() {
               busy={save.isPending}
             />
           )}{" "}
+          {modal.kind === "feature" && !modal.value && (
+            <section
+              className={`feature-import${importDragging ? " dragging" : ""}`}
+              aria-label="Import feature drop zone"
+              onDragOver={(event) => {
+                event.preventDefault();
+                setImportDragging(true);
+              }}
+              onDragLeave={() => setImportDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setImportDragging(false);
+                if (!save.isPending) {
+                  if (event.dataTransfer.files.length !== 1)
+                    setError("Drop one feature JSON file at a time.");
+                  else void importFeature(event.dataTransfer.files[0]);
+                }
+              }}
+            >
+              <input
+                ref={featureImportRef}
+                hidden
+                type="file"
+                accept="application/json,.json"
+                aria-label="Import feature JSON"
+                onChange={(event) =>
+                  void importFeature(event.target.files?.[0])
+                }
+              />
+              <p>Or import a feature</p>
+              <p className="muted">
+                Drop a Mockman feature JSON file here, or choose a file.
+              </p>
+              <Button
+                variant="outline"
+                disabled={save.isPending}
+                onClick={() => featureImportRef.current?.click()}
+              >
+                <Upload size={15} />
+                Import feature
+              </Button>
+            </section>
+          )}
+          {modal.kind === "response-view" && (
+            <div className="response-viewer">
+              <div className="response-viewer-meta">
+                <span
+                  className={`status ${modal.value.status >= 400 ? "failure" : "success"}`}
+                >
+                  HTTP {modal.value.status}
+                </span>
+                <span className="muted">
+                  {modal.value.delayMs.toLocaleString()} ms delay
+                </span>
+              </div>
+              <div className="response-viewer-content">
+                <section
+                  className="response-viewer-body"
+                  aria-label="Response JSON body"
+                >
+                  <h3>Response body</h3>
+                  <JsonPreview text={pretty(modal.value.body)} />
+                </section>
+                <details className="response-viewer-headers">
+                  <summary>
+                    Response headers ({Object.keys(modal.value.headers).length})
+                  </summary>
+                  <JsonPreview text={pretty(modal.value.headers)} />
+                </details>
+              </div>
+              <div className="response-viewer-actions">
+                <Button
+                  variant="destructive"
+                  disabled={save.isPending}
+                  onClick={() =>
+                    remove(
+                      "response",
+                      modal.value.name,
+                      (_, __, ___, endpoint) => {
+                        if (endpoint)
+                          endpoint.responses = endpoint.responses.filter(
+                            (response) => response.id !== modal.value.id,
+                          );
+                      },
+                    )
+                  }
+                >
+                  <Trash2 size={15} />
+                  Delete response
+                </Button>
+                <Button
+                  disabled={save.isPending}
+                  onClick={() =>
+                    setModal({ kind: "response", value: modal.value })
+                  }
+                >
+                  <Pencil size={15} />
+                  Edit response
+                </Button>
+              </div>
+            </div>
+          )}
           {modal.kind === "response" && (
             <ResponseForm
               value={modal.value}
@@ -1592,9 +1858,10 @@ export default function App() {
               theme={theme}
             />
           )}{" "}
-          {modal.kind === "try" && e && p && (
+          {modal.kind === "try" && e && p && f && (
             <TryForm
               endpoint={e}
+              feature={f.id}
               project={p.id}
               environment={env}
               onDone={() => void logs.refetch()}

@@ -35,7 +35,9 @@ export function Button({
   const Comp = asChild ? Slot : "button";
   return (
     <Comp
+      title={props["aria-label"]}
       data-slot="button"
+      data-variant={variant || "default"}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

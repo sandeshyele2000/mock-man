@@ -233,3 +233,69 @@ func TestRuntimeCapacityAndLogCap(t *testing.T) {
 		t.Fatalf("log cap: count %d err %v", count, err)
 	}
 }
+
+func TestFeaturePausePersistsWithoutAdvancingAttempts(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	config, err := store.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := store.Match(ctx, "demo", "development", "pause-test", req())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Projects[0].Features[0].MockingDisabled = true
+	config, err = store.Save(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted, err := store.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !persisted.Projects[0].Features[0].MockingDisabled {
+		t.Fatal("feature pause was not persisted")
+	}
+	if _, err := store.Match(ctx, "demo", "development", "pause-test", req()); err != engine.ErrNoMatch {
+		t.Fatalf("paused request: %v", err)
+	}
+	config.Projects[0].Features[0].MockingDisabled = false
+	if _, err = store.Save(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := store.Match(ctx, "demo", "development", "pause-test", req())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.Attempt != first.Attempt+1 {
+		t.Fatalf("attempt changed while paused: first=%d resumed=%d", first.Attempt, resumed.Attempt)
+	}
+}
+
+func TestLegacyGlobalPauseDoesNotDisableMocking(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	// Existing documents may still contain the retired workspace-wide flag.
+	if err := store.DB.WithContext(ctx).Exec(`UPDATE configuration SET document = (document::jsonb || '{"mockingDisabled":true}'::jsonb)::json`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Match(ctx, "demo", "development", "legacy-global", req()); err != nil {
+		t.Fatalf("retired global flag still blocks requests: %v", err)
+	}
+	config, err := store.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := document["mockingDisabled"]; found {
+		t.Fatal("retired global flag still exposed by config API")
+	}
+}

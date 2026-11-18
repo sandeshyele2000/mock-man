@@ -19,13 +19,13 @@ services:
     environment:
       DATABASE_URL: postgres://mockman:mockman@db:5432/mockman?sslmode=disable
       ADMIN_ADDR: 0.0.0.0:8080
-      ADMIN_ORIGIN: ${ADMIN_ORIGIN:-http://localhost:8080}
-      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://localhost:5173}
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${ADMIN_PORT:-8080}}
+      DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${DASHBOARD_PORT:-5173}}
       MOCK_ADDR: 0.0.0.0:9091
       MOCK_ALLOWED_ORIGINS: ${MOCK_ALLOWED_ORIGINS:-}
     ports:
-      - '${BIND_ADDRESS:-127.0.0.1}:8080:8080'
-      - '${BIND_ADDRESS:-127.0.0.1}:9091:9091'
+      - '${BIND_ADDRESS:-127.0.0.1}:${ADMIN_PORT:-8080}:8080'
+      - '${BIND_ADDRESS:-127.0.0.1}:${MOCK_PORT:-9091}:9091'
     depends_on:
       db:
         condition: service_healthy
@@ -33,11 +33,11 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-      args:
-        VITE_API_URL: ${ADMIN_ORIGIN:-http://localhost:8080}
-        VITE_MOCK_URL: ${MOCK_ORIGIN:-http://localhost:9091}
+    environment:
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${ADMIN_PORT:-8080}}
+      MOCK_ORIGIN: ${MOCK_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${MOCK_PORT:-9091}}
     ports:
-      - '${BIND_ADDRESS:-127.0.0.1}:5173:80'
+      - '${BIND_ADDRESS:-127.0.0.1}:${DASHBOARD_PORT:-5173}:80'
     depends_on:
       - app
 volumes:

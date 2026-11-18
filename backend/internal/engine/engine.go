@@ -15,6 +15,7 @@ import (
 
 const MaxDelay = 30000
 
+var ErrAmbiguousFeature = errors.New("multiple enabled features match this method and path; set X-Mock-Feature")
 var ErrNoMatch = errors.New("no enabled rule matched method, path and conditions")
 var ErrFlowExecution = errors.New("flow execution failed")
 var ErrScriptExecution = errors.New("JavaScript scenario execution failed")
@@ -34,9 +35,10 @@ type Project struct {
 	Features     []Feature `json:"features"`
 }
 type Feature struct {
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Endpoints []Endpoint `json:"endpoints"`
+	MockingDisabled bool       `json:"mockingDisabled,omitempty"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Endpoints       []Endpoint `json:"endpoints"`
 }
 type Endpoint struct {
 	ID        string            `json:"id"`
@@ -95,12 +97,14 @@ type Scenario struct {
 	Code        string      `json:"code,omitempty"`
 }
 type Request struct {
-	Method, Path, Scenario string
-	Query                  url.Values
-	Headers                http.Header
-	Body                   any
+	Method, Path, Scenario, Feature string
+	Query                           url.Values
+	Headers                         http.Header
+	Body                            any
+	RawBody                         []byte
 }
 type Match struct {
+	Feature  string
 	Endpoint Endpoint
 	Scenario Scenario
 	Reason   string
@@ -193,21 +197,35 @@ func bodyFieldValue(body any, path string) (string, bool) {
 	return string(encoded), true
 }
 func Select(project Project, environment string, request Request) (Match, error) {
+	var selected *Endpoint
+	var featureID string
 	for _, feature := range project.Features {
-		for _, endpoint := range feature.Endpoints {
-			if !endpointMatches(endpoint, request) {
+		if feature.MockingDisabled || (request.Feature != "" && feature.ID != request.Feature) {
+			continue
+		}
+		for index := range feature.Endpoints {
+			endpoint := &feature.Endpoints[index]
+			if !endpointMatches(*endpoint, request) {
 				continue
 			}
-			match, ok, err := selectEndpointScenario(endpoint, environment, request)
-			if err != nil {
-				return Match{}, err
+			if selected != nil {
+				return Match{}, ErrAmbiguousFeature
 			}
-			if ok {
-				return match, nil
-			}
+			selected, featureID = endpoint, feature.ID
 		}
 	}
-	return Match{}, ErrNoMatch
+	if selected == nil {
+		return Match{}, ErrNoMatch
+	}
+	match, ok, err := selectEndpointScenario(*selected, environment, request)
+	if err != nil {
+		return Match{}, err
+	}
+	if !ok {
+		return Match{}, ErrNoMatch
+	}
+	match.Feature = featureID
+	return match, nil
 }
 
 func endpointMatches(endpoint Endpoint, request Request) bool {
@@ -242,7 +260,7 @@ func orderedScenarios(scenarios []Scenario) []Scenario {
 func selectOverride(endpoint Endpoint, scenarios []Scenario, request Request) (Match, bool, error) {
 	for _, scenario := range scenarios {
 		if scenario.ID == request.Scenario && Matches(scenario.Conditions, request) {
-			return Match{endpoint, scenario, "explicit scenario override; conditions matched"}, true, nil
+			return Match{Endpoint: endpoint, Scenario: scenario, Reason: "explicit scenario override; conditions matched"}, true, nil
 		}
 	}
 	return Match{}, false, fmt.Errorf("%w: override scenario absent or conditions did not match", ErrNoMatch)
@@ -251,7 +269,7 @@ func selectOverride(endpoint Endpoint, scenarios []Scenario, request Request) (M
 func selectConditional(endpoint Endpoint, scenarios []Scenario, request Request) (Match, bool) {
 	for _, scenario := range scenarios {
 		if len(scenario.Conditions) > 0 && Matches(scenario.Conditions, request) {
-			return Match{endpoint, scenario, fmt.Sprintf("conditions matched; priority %d", scenario.Priority)}, true
+			return Match{Endpoint: endpoint, Scenario: scenario, Reason: fmt.Sprintf("conditions matched; priority %d", scenario.Priority)}, true
 		}
 	}
 	return Match{}, false
@@ -261,7 +279,7 @@ func selectActive(endpoint Endpoint, environment string, scenarios []Scenario, r
 	activeID := endpoint.Active[environment]
 	for _, scenario := range scenarios {
 		if activeID == scenario.ID && Matches(scenario.Conditions, request) {
-			return Match{endpoint, scenario, "active scenario; conditions matched"}, true, nil
+			return Match{Endpoint: endpoint, Scenario: scenario, Reason: "active scenario; conditions matched"}, true, nil
 		}
 	}
 	return Match{}, false, nil

@@ -170,3 +170,163 @@ func TestHTTPStatusHeadersBodyAndLimits(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPPayloadLogs(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	config, err := store.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoint := &config.Projects[0].Features[0].Endpoints[0]
+	for index := range endpoint.Responses {
+		endpoint.Responses[index].DelayMS = 0
+	}
+	if _, err := store.Save(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(mockruntime.Handler(store))
+	defer server.Close()
+	for _, test := range []struct{ session, body, contentType, encoding string }{
+		{"json-payload", "{\n\"id\":9007199254740993,\"accepted\":true\n}", "application/json", "utf-8"},
+		{"form-payload", "name=Jane+Doe", "application/x-www-form-urlencoded", "utf-8"},
+		{"empty-payload", "", "", "utf-8"},
+		{"large-payload", strings.Repeat("a", 70000), "text/plain", "utf-8"},
+		{"binary-payload", "a\x00b", "application/octet-stream", "base64"},
+	} {
+		t.Run(test.session, func(t *testing.T) {
+			request, err := http.NewRequest(http.MethodPost, server.URL+endpoint.Path, strings.NewReader(test.body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("X-Mock-Session", test.session)
+			request.Header.Set("Content-Type", test.contentType)
+			response, err := server.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, response.Body)
+			response.Body.Close()
+			if response.StatusCode != 500 {
+				t.Fatalf("mock behavior changed: %d", response.StatusCode)
+			}
+			logs, err := store.Logs(ctx, "demo", "development")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var detail storage.Detail
+			if err := json.Unmarshal(logs[0].Detail, &detail); err != nil {
+				t.Fatal(err)
+			}
+			if detail.Session != test.session || detail.Payload == nil {
+				t.Fatalf("missing payload: %+v", detail)
+			}
+			payload := detail.Payload
+			if payload.SizeBytes != len(test.body) || payload.ContentType != test.contentType || payload.Encoding != test.encoding {
+				t.Fatalf("invalid payload metadata: %+v", payload)
+			}
+			wantBody := test.body
+			if len(wantBody) > 64<<10 {
+				wantBody = wantBody[:64<<10]
+			}
+			if payload.Truncated != (len(test.body) > 64<<10) {
+				t.Fatal("incorrect truncation flag")
+			}
+			if test.encoding == "utf-8" && payload.Body != wantBody {
+				t.Fatalf("body not preserved: %q", payload.Body)
+			}
+		})
+	}
+}
+
+func TestHTTPFeatureRoutingAndIsolation(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	config, err := store.Config(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &config.Projects[0].Features[0]
+	for index := range first.Endpoints[0].Responses {
+		first.Endpoints[0].Responses[index].DelayMS = 0
+	}
+	encoded, err := json.Marshal(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var second engine.Feature
+	if err := json.Unmarshal(encoded, &second); err != nil {
+		t.Fatal(err)
+	}
+	second.ID, second.Name = "billing", "Billing"
+	second.Endpoints[0].ID = "billing-accept"
+	second.Endpoints[0].Responses[0].Body = json.RawMessage(`{"feature":"billing"}`)
+	config.Projects[0].Features = append(config.Projects[0].Features, second)
+	config, err = store.Save(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(mockruntime.Handler(store))
+	defer server.Close()
+	send := func(feature string, want int) string {
+		t.Helper()
+		request, err := http.NewRequest(http.MethodPost, server.URL+second.Endpoints[0].Path, strings.NewReader(`{"client":true}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		request.Header.Set("X-Mock-Feature", feature)
+		request.Header.Set("X-Mock-Session", "shared-session")
+		response, err := server.Client().Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("feature=%q status=%d body=%s", feature, response.StatusCode, body)
+		}
+		return string(body)
+	}
+	if body := send("", 409); !strings.Contains(body, "X-Mock-Feature") {
+		t.Fatal("ambiguous error lacks routing guidance")
+	}
+	send("missing", 404)
+	send("bad/feature", 400)
+	send("agreements", 500)
+	if body := send("billing", 500); body != `{"feature":"billing"}` {
+		t.Fatalf("wrong feature response: %s", body)
+	}
+	logs, err := store.Logs(ctx, "demo", "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("rejected requests allocated state: log count %d", len(logs))
+	}
+	for index, feature := range []string{"billing", "agreements"} {
+		var detail storage.Detail
+		if err := json.Unmarshal(logs[index].Detail, &detail); err != nil {
+			t.Fatal(err)
+		}
+		if detail.Feature != feature || detail.Attempt != 1 {
+			t.Fatalf("feature isolation: %+v", detail)
+		}
+	}
+	config.Projects[0].Features[1].MockingDisabled = true
+	config, err = store.Save(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	send("billing", 404)
+	send("", 500) // One enabled feature: legacy callers still work.
+	// JavaScript receives the resolved feature even for legacy, unscoped requests.
+	scenario := &config.Projects[0].Features[0].Endpoints[0].Scenarios[0]
+	scenario.Behavior = "javascript"
+	scenario.Code = `return { response: { status: 200, body: { feature: request.feature } } };`
+	if _, err := store.Save(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	if body := send("", 200); body != `{"feature":"agreements"}` {
+		t.Fatalf("script feature context: %s", body)
+	}
+}

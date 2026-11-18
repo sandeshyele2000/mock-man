@@ -384,6 +384,8 @@ export interface components {
             features: components["schemas"]["Feature"][];
         };
         Feature: {
+            /** @description Pause mocking without changing individual endpoint settings. */
+            mockingDisabled?: boolean;
             id: string;
             name: string;
             endpoints: components["schemas"]["Endpoint"][];
@@ -456,7 +458,20 @@ export interface components {
         Error: {
             error: string;
         };
+        RequestPayload: {
+            /** @description Original body text, or base64 for binary payloads. Capture is limited to 64 KiB. */
+            body: string;
+            /** @enum {string} */
+            encoding: "utf-8" | "base64";
+            contentType: string;
+            /** @description Full request body size before capture truncation. */
+            sizeBytes: number;
+            truncated: boolean;
+        };
         LogDetail: {
+            /** @description Feature identifier. Optional for older clients and logs. */
+            feature?: string;
+            payload?: components["schemas"]["RequestPayload"];
             method: string;
             path: string;
             endpoint: string;
@@ -481,6 +496,8 @@ export interface components {
             endpoint: string;
         };
         TryRequest: {
+            /** @description Feature identifier. Optional for older clients and logs. */
+            feature?: string;
             project: string;
             environment: string;
             session: string;

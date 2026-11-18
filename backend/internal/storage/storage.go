@@ -31,16 +31,18 @@ type Log struct {
 	Detail    json.RawMessage `json:"detail"`
 }
 type Detail struct {
-	Method   string `json:"method"`
-	Path     string `json:"path"`
-	Endpoint string `json:"endpoint"`
-	Scenario string `json:"scenario"`
-	Revision string `json:"revision"`
-	Session  string `json:"session"`
-	Attempt  int64  `json:"attempt"`
-	Status   int    `json:"status"`
-	DelayMS  int    `json:"delayMs"`
-	Reason   string `json:"reason"`
+	Feature  string   `json:"feature,omitempty"`
+	Method   string   `json:"method"`
+	Path     string   `json:"path"`
+	Endpoint string   `json:"endpoint"`
+	Scenario string   `json:"scenario"`
+	Revision string   `json:"revision"`
+	Session  string   `json:"session"`
+	Attempt  int64    `json:"attempt"`
+	Status   int      `json:"status"`
+	DelayMS  int      `json:"delayMs"`
+	Reason   string   `json:"reason"`
+	Payload  *Payload `json:"payload,omitempty"`
 }
 
 func Revision() string {
@@ -216,6 +218,7 @@ func (s *Store) Match(ctx context.Context, project, environment, session string,
 		if err != nil {
 			return err
 		}
+		request.Feature = match.Feature
 		if err := checkAttemptCapacity(ctx, tx, project, environment, session, match); err != nil {
 			return err
 		}
@@ -302,7 +305,13 @@ func saveFlowCursor(ctx context.Context, tx *gorm.DB, project, environment, sess
 }
 
 func writeRequestLog(ctx context.Context, tx *gorm.DB, project, environment, session string, request engine.Request, plan engine.Plan) error {
-	detail, err := json.Marshal(Detail{request.Method, request.Path, plan.Match.Endpoint.ID, plan.Match.Scenario.ID, plan.Match.Scenario.Revision, session, plan.Attempt, plan.Response.Status, plan.Response.DelayMS, plan.Match.Reason})
+	detail, err := json.Marshal(Detail{
+		Method: request.Method, Path: request.Path, Feature: plan.Match.Feature, Endpoint: plan.Match.Endpoint.ID,
+		Scenario: plan.Match.Scenario.ID, Revision: plan.Match.Scenario.Revision,
+		Session: session, Attempt: plan.Attempt, Status: plan.Response.Status,
+		DelayMS: plan.Response.DelayMS, Reason: plan.Match.Reason,
+		Payload: capturePayload(request.RawBody, request.Headers.Get("Content-Type")),
+	})
 	if err != nil {
 		return err
 	}

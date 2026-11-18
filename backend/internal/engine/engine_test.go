@@ -111,3 +111,88 @@ func TestPathValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestFeaturePausePreservesEndpointSettings(t *testing.T) {
+	config := storage.Sample()
+	project := config.Projects[0]
+	endpoint := project.Features[0].Endpoints[0]
+	request := engine.Request{Method: endpoint.Method, Path: endpoint.Path}
+	if _, err := engine.Select(project, "development", request); err != nil {
+		t.Fatal(err)
+	}
+	project.Features[0].MockingDisabled = true
+	request.Scenario = endpoint.Scenarios[0].ID
+	if _, err := engine.Select(project, "development", request); err != engine.ErrNoMatch {
+		t.Fatalf("override bypassed disabled feature: %v", err)
+	}
+	project.Features[0].MockingDisabled = false
+	if _, err := engine.Select(project, "development", request); err != nil {
+		t.Fatal(err)
+	}
+	if !project.Features[0].Endpoints[0].Enabled {
+		t.Fatal("pause changed endpoint settings")
+	}
+	project.Features[0].Endpoints[0].Enabled = false
+	if _, err := engine.Select(project, "development", request); err != engine.ErrNoMatch {
+		t.Fatalf("disabled endpoint matched: %v", err)
+	}
+}
+
+func featureRoutingConfig() engine.Config {
+	config := storage.Sample()
+	second := config.Projects[0].Features[0]
+	second.ID, second.Name = "billing", "Billing"
+	second.Endpoints = append([]engine.Endpoint(nil), second.Endpoints...)
+	second.Endpoints[0].ID = "billing-accept"
+	config.Projects[0].Features = append(config.Projects[0].Features, second)
+	return config
+}
+
+func TestFeatureRoutingAndValidation(t *testing.T) {
+	config := featureRoutingConfig()
+	if err := engine.Validate(config); err != nil {
+		t.Fatalf("cross-feature routes should be allowed: %v", err)
+	}
+	request := engine.Request{Method: "POST", Path: "/v1/agreements/acceptances"}
+	if _, err := engine.Select(config.Projects[0], "development", request); err != engine.ErrAmbiguousFeature {
+		t.Fatalf("unscoped shared route: %v", err)
+	}
+	for _, feature := range config.Projects[0].Features {
+		request.Feature = feature.ID
+		match, err := engine.Select(config.Projects[0], "development", request)
+		if err != nil || match.Feature != feature.ID || match.Endpoint.ID != feature.Endpoints[0].ID {
+			t.Fatalf("wrong feature matched: %+v %v", match, err)
+		}
+	}
+	request.Feature = "missing"
+	if _, err := engine.Select(config.Projects[0], "development", request); err != engine.ErrNoMatch {
+		t.Fatalf("unknown feature fell back: %v", err)
+	}
+	config.Projects[0].Features[1].MockingDisabled = true
+	request.Feature = "billing"
+	if _, err := engine.Select(config.Projects[0], "development", request); err != engine.ErrNoMatch {
+		t.Fatalf("disabled feature fell back: %v", err)
+	}
+	request.Feature = ""
+	match, err := engine.Select(config.Projects[0], "development", request)
+	if err != nil || match.Feature != "agreements" {
+		t.Fatalf("unique enabled feature did not match: %+v %v", match, err)
+	}
+	config.Projects[0].Features[1].MockingDisabled = false
+	config.Projects[0].Features[1].Endpoints[0].Enabled = false
+	if _, err := engine.Select(config.Projects[0], "development", request); err != nil {
+		t.Fatalf("disabled endpoint should not create ambiguity: %v", err)
+	}
+	// Conditions and scenario overrides cannot route an otherwise ambiguous request.
+	config = featureRoutingConfig()
+	request.Scenario = "retry"
+	config.Projects[0].Features[1].Endpoints[0].Active = map[string]string{}
+	if _, err := engine.Select(config.Projects[0], "development", request); err != engine.ErrAmbiguousFeature {
+		t.Fatalf("scenario bypassed feature routing: %v", err)
+	}
+	// Endpoint IDs must still be project-wide unique for counters and logs.
+	config.Projects[0].Features[1].Endpoints[0].ID = "accept"
+	if err := engine.Validate(config); err == nil {
+		t.Fatal("duplicate endpoint IDs accepted across features")
+	}
+}

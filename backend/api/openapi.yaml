@@ -4,7 +4,9 @@ info:
   version: 0.1.0
   description: >-
     Same-origin local admin API. Mutations require Content-Type: application/json and
-    X-Mockman-Admin: 1. Mock listener preserves application paths; see README for runtime headers.
+    X-Mockman-Admin: 1. Mock listener preserves application paths. X-Mock-Feature selects a feature; omitting it
+    returns HTTP 409 if multiple enabled features contain the same method and path.
+    See README for runtime headers.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -258,6 +260,9 @@ components:
         - name
         - endpoints
       properties:
+        mockingDisabled:
+          type: boolean
+          description: Pause mocking without changing individual endpoint settings.
         id:
           type: string
         name:
@@ -474,6 +479,24 @@ components:
         error:
           type: string
       additionalProperties: false
+    RequestPayload:
+      type: object
+      required: [body, encoding, contentType, sizeBytes, truncated]
+      properties:
+        body:
+          type: string
+          description: Original body text, or base64 for binary payloads. Capture is limited to 64 KiB.
+        encoding:
+          type: string
+          enum: [utf-8, base64]
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+          description: Full request body size before capture truncation.
+        truncated:
+          type: boolean
+      additionalProperties: false
     LogDetail:
       type: object
       required:
@@ -488,6 +511,11 @@ components:
         - delayMs
         - reason
       properties:
+        feature:
+          type: string
+          description: Feature identifier. Optional for older clients and logs.
+        payload:
+          $ref: '#/components/schemas/RequestPayload'
         method:
           type: string
         path:
@@ -553,6 +581,9 @@ components:
         - headers
         - body
       properties:
+        feature:
+          type: string
+          description: Feature identifier. Optional for older clients and logs.
         project:
           type: string
         environment:

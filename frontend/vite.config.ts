@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       ),
     },
     server: {
-      host: dashboard.hostname,
+      host: serverConfig.bindAddress,
       port: Number(
         dashboard.port || (dashboard.protocol === "https:" ? 443 : 80),
       ),

@@ -38,6 +38,9 @@ func Context(r *http.Request) (project, env, session string, err error) {
 	if s := r.Header.Get("X-Mock-Scenario"); s != "" && !engine.ValidID(s) {
 		err = errors.New("invalid scenario identifier")
 	}
+	if feature := r.Header.Get("X-Mock-Feature"); feature != "" && !engine.ValidID(feature) {
+		err = errors.New("invalid feature identifier")
+	}
 	return
 }
 func Wait(ctx context.Context, ms int) bool {
@@ -63,12 +66,12 @@ func serveMockRequest(w http.ResponseWriter, r *http.Request, store *storage.Sto
 		fail(w, http.StatusBadRequest, err)
 		return
 	}
-	body, err := readRequestBody(w, r)
+	body, raw, err := readRequestBody(w, r)
 	if err != nil {
 		fail(w, http.StatusRequestEntityTooLarge, err)
 		return
 	}
-	request := engine.Request{Method: r.Method, Path: r.URL.Path, Scenario: r.Header.Get("X-Mock-Scenario"), Query: r.URL.Query(), Headers: r.Header, Body: body}
+	request := engine.Request{Method: r.Method, Path: r.URL.Path, Scenario: r.Header.Get("X-Mock-Scenario"), Feature: r.Header.Get("X-Mock-Feature"), Query: r.URL.Query(), Headers: r.Header, Body: body, RawBody: raw}
 	plan, err := allocateResponse(r.Context(), store, project, environment, session, request)
 	if err != nil {
 		writeMatchFailure(w, err)
@@ -77,22 +80,22 @@ func serveMockRequest(w http.ResponseWriter, r *http.Request, store *storage.Sto
 	writeMockResponse(w, r, plan)
 }
 
-func readRequestBody(w http.ResponseWriter, r *http.Request) (any, error) {
+func readRequestBody(w http.ResponseWriter, r *http.Request) (any, []byte, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, MaxRequestBytes)
 	raw, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, errors.New("request body exceeds 1 MiB")
+		return nil, nil, errors.New("request body exceeds 1 MiB")
 	}
 	if len(raw) == 0 {
-		return nil, nil
+		return nil, raw, nil
 	}
 	var body any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	if err := decoder.Decode(&body); err != nil || !json.Valid(raw) {
-		return nil, nil
+		return nil, raw, nil
 	}
-	return body, nil
+	return body, raw, nil
 }
 
 func allocateResponse(parent context.Context, store *storage.Store, project, environment, session string, request engine.Request) (engine.Plan, error) {
@@ -105,6 +108,8 @@ func writeMatchFailure(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	if errors.Is(err, engine.ErrNoMatch) || errors.Is(err, storage.ErrContext) {
 		status = http.StatusNotFound
+	} else if errors.Is(err, engine.ErrAmbiguousFeature) {
+		status = http.StatusConflict
 	} else if errors.Is(err, storage.ErrCapacity) {
 		status = http.StatusServiceUnavailable
 	} else if errors.Is(err, engine.ErrFlowExecution) {

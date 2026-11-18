@@ -42,9 +42,12 @@ func TestCORSPreflight(t *testing.T) {
 	r := httptest.NewRequest("OPTIONS", "/original", nil)
 	r.Header.Set("Origin", "http://localhost:3000")
 	r.Header.Set("Access-Control-Request-Method", "POST")
-	r.Header.Set("Access-Control-Request-Headers", "x-mock-session, content-type")
+	r.Header.Set("Access-Control-Request-Headers", "x-mock-session, x-mock-feature, content-type")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, r)
+	if w.Header().Get("Access-Control-Allow-Headers") != "x-mock-session, x-mock-feature, content-type" {
+		t.Fatal("feature header not permitted by preflight")
+	}
 	if called || w.Code != 204 || w.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3000" || w.Header().Get("Access-Control-Allow-Credentials") != "" {
 		t.Fatal("invalid preflight", w.Code, w.Header())
 	}
@@ -53,5 +56,17 @@ func TestCORSPreflight(t *testing.T) {
 	handler.ServeHTTP(w, r)
 	if !called || w.Header().Get("Access-Control-Allow-Origin") != "" {
 		t.Fatal("foreign origin allowed")
+	}
+}
+
+func TestFeatureHeaderValidation(t *testing.T) {
+	for _, feature := range []string{"agreements", "billing-v2", "", "bad/feature", " ", "bad feature"} {
+		request := httptest.NewRequest(http.MethodGet, "/original", nil)
+		request.Header.Set("X-Mock-Feature", feature)
+		_, _, _, err := mockruntime.Context(request)
+		valid := feature == "" || feature == "agreements" || feature == "billing-v2"
+		if (err == nil) != valid {
+			t.Fatalf("feature %q: error=%v", feature, err)
+		}
 	}
 }

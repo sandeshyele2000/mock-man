@@ -27,6 +27,7 @@ import {
   type TryResult,
 } from "../api";
 import { Button } from "./ui/button";
+import { JsonPreview } from "./JsonPreview";
 import { SelectField } from "./ui/select";
 const id = () => crypto.randomUUID().slice(0, 8);
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
@@ -79,10 +80,12 @@ function Field({
 
 export function Modal({
   title,
+  wide = false,
   children,
   onClose,
 }: {
   title: string;
+  wide?: boolean;
   children: ReactNode;
   onClose: () => void;
 }) {
@@ -96,6 +99,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
+      className={wide ? "wide-modal" : undefined}
       aria-labelledby={titleId}
       onCancel={onClose}
       onClick={(e) => {
@@ -495,7 +499,7 @@ export function ScenarioForm({
         <>
           <Field
             label="JavaScript code"
-            hint="Available globals: request, input, responses, attempt, session, environment, _, moment. Return { responseId } or { response: { status, headers, body, delayMs } }."
+            hint="Code runs inside a function; use return directly. Available globals: request, input, responses, attempt, session, environment, _, moment. Return { responseId } or { response: { status, headers, body, delayMs } }."
           >
             <Suspense
               fallback={
@@ -654,11 +658,13 @@ export function ScenarioForm({
 }
 export function TryForm({
   endpoint,
+  feature,
   project,
   environment,
   onDone,
 }: {
   endpoint: Endpoint;
+  feature: string;
   project: string;
   environment: string;
   onDone: () => void;
@@ -680,6 +686,7 @@ export function TryForm({
         throw Error("Headers must be a JSON object of strings");
       return api<TryResult>("/api/try", "POST", {
         method: endpoint.method,
+        feature,
         path,
         body,
         headers: h,
@@ -698,6 +705,12 @@ export function TryForm({
         request.mutate();
       }}
     >
+      <Field
+        label="Feature"
+        hint="X-Mock-Feature is set automatically for this feature."
+      >
+        <input value={feature} readOnly />
+      </Field>
       <Field label={`${endpoint.method} · Request path and query`}>
         <input
           value={path}
@@ -750,10 +763,11 @@ export function TryForm({
             </b>
             <span>{request.data.elapsedMs} ms</span>
           </div>
-          <pre>{pretty(request.data.headers)}</pre>
-          <pre data-testid="try-body">
-            {request.data.body || "(empty body)"}
-          </pre>
+          <JsonPreview text={pretty(request.data.headers)} />
+          <JsonPreview
+            text={request.data.body || "(empty body)"}
+            testID="try-body"
+          />
         </div>
       )}
     </form>

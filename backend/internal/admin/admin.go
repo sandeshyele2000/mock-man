@@ -29,6 +29,7 @@ type resetRequest struct {
 	Endpoint    string `json:"endpoint"`
 }
 type tryRequest struct {
+	Feature     string            `json:"feature"`
 	Project     string            `json:"project"`
 	Environment string            `json:"environment"`
 	Session     string            `json:"session"`
@@ -152,6 +153,9 @@ func (s Server) postTry(w http.ResponseWriter, r *http.Request) {
 }
 
 func buildTryHTTPRequest(parent *http.Request, input tryRequest) (*http.Request, error) {
+	if !optionalID(input.Feature) {
+		return nil, errors.New("invalid feature identifier")
+	}
 	parsed, err := url.ParseRequestURI(input.Path)
 	if err != nil || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(input.Path, "/") {
 		return nil, errors.New("use an absolute API path with optional query")
@@ -162,6 +166,9 @@ func buildTryHTTPRequest(parent *http.Request, input tryRequest) (*http.Request,
 	}
 	for name, value := range input.Headers {
 		request.Header.Set(name, value)
+	}
+	if input.Feature != "" {
+		request.Header.Set("X-Mock-Feature", input.Feature)
 	}
 	request.Header.Set("X-Mock-Project", input.Project)
 	request.Header.Set("X-Mock-Environment", input.Environment)

@@ -13,6 +13,7 @@ type Props = {
 
 const runtimeTypes = `
 type MockmanRequest = {
+  feature: string;
   method: string;
   path: string;
   scenario: string;
@@ -105,6 +106,31 @@ workerGlobal.MonacoEnvironment = {
 let runtimeTypesRegistered = false;
 
 function configureJavaScript() {
+  monaco.editor.defineTheme("mockman-dark", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "92A5BD" },
+      { token: "keyword", foreground: "00ED64" },
+      { token: "string", foreground: "71E6AB" },
+      { token: "number", foreground: "F0CC8B" },
+    ],
+    colors: {
+      "editor.background": "#081322",
+      "editor.foreground": "#E8EDEB",
+      "editorLineNumber.foreground": "#92A5BD",
+      "editorLineNumber.activeForeground": "#00ED64",
+      "editorCursor.foreground": "#00ED64",
+      "editor.selectionBackground": "#00684A",
+      "editor.lineHighlightBackground": "#14253A",
+      "editorWidget.background": "#14253A",
+      "editorWidget.border": "#526C88",
+      "editorSuggestWidget.background": "#14253A",
+      "editorSuggestWidget.foreground": "#E8EDEB",
+      "editorSuggestWidget.selectedBackground": "#07362F",
+      focusBorder: "#00ED64",
+    },
+  });
   const defaults = typescript.javascriptDefaults;
   defaults.setCompilerOptions({
     allowNonTsExtensions: true,
@@ -115,8 +141,10 @@ function configureJavaScript() {
     target: typescript.ScriptTarget.ES2020,
   });
   defaults.setDiagnosticsOptions({
-    noSyntaxValidation: true,
+    noSyntaxValidation: false,
     noSemanticValidation: false,
+    // The backend wraps snippets in a function, so top-level return is valid.
+    diagnosticCodesToIgnore: [1108],
   });
   if (!runtimeTypesRegistered) {
     defaults.addExtraLib(runtimeTypes, "file:///mockman/runtime.d.ts");
@@ -130,7 +158,7 @@ export function JavaScriptCodeEditor({ value, onChange, theme }: Props) {
       <Editor
         height="300px"
         language="javascript"
-        theme={theme === "dark" ? "vs-dark" : "vs"}
+        theme={theme === "dark" ? "mockman-dark" : "vs"}
         value={value}
         beforeMount={configureJavaScript}
         onChange={(nextValue) => onChange(nextValue ?? "")}
