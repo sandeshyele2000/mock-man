@@ -26,6 +26,26 @@ func TestAdminProtections(t *testing.T) {
 	}
 }
 
+func TestAdminBehindPathProxy(t *testing.T) {
+	const origin = "https://atlas.example.com"
+	h := admin.Server{
+		Origin: origin + "/mockman-api/", DashboardOrigin: origin,
+		Runtime: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	}.Handler()
+	// The outer proxy strips /mockman-api/ and preserves the public Host.
+	r := httptest.NewRequest(http.MethodPost, origin+"/api/try", strings.NewReader(`{"project":"demo","environment":"development","method":"GET","path":"/example"}`))
+	r.Header.Set("Origin", origin)
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Mockman-Admin", "1")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestTryFeatureHeader(t *testing.T) {
 	for _, test := range []struct {
 		name, body, feature string

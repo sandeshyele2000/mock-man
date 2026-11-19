@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+
 # Serialize public settings as JSON; do not interpolate environment values into JS.
 {
   printf 'window.__MOCKMAN_CONFIG__ = '

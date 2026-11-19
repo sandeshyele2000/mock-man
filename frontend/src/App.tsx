@@ -629,7 +629,7 @@ export default function App() {
     <div className="app" data-theme={theme}>
       <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="sidebar-header">
-          <a className="brand" href="/" aria-label="Mockman home">
+          <a className="brand" href="./" aria-label="Mockman home">
             <span className="brand-icon">
               <MockmanMark size={23} />
             </span>

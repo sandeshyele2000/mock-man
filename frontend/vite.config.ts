@@ -8,6 +8,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, projectRoot, "");
   const dashboard = new URL(serverConfig.dashboardOrigin);
   return {
+    // Resolve assets relative to the dashboard URL, including proxy subpaths.
+    base: "./",
     plugins: [react(), tailwindcss()],
     envDir: projectRoot,
     define: {

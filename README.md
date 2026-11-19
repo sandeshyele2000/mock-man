@@ -128,6 +128,70 @@ listen addresses. Browser-only `VITE_API_URL` and `VITE_MOCK_URL` are developmen
 or static-build overrides; Docker uses runtime `ADMIN_ORIGIN` and `MOCK_ORIGIN`.
 All browser configuration is public; never put secrets in it.
 
+## Hosting behind a path-based HTTPS proxy
+
+Use the following public settings in the deployment `.env`:
+
+```dotenv
+DASHBOARD_ORIGIN=https://atlas.example.com
+ADMIN_ORIGIN=https://atlas.example.com/mockman-api/
+MOCK_ORIGIN=https://atlas.example.com/mockman-mock/
+```
+
+`DASHBOARD_ORIGIN` must contain only the browser origin (scheme and hostname,
+plus port if needed), without `/mockman/`. The backend uses it to validate the
+browser's Origin header. The API URLs include their public prefixes; requests
+such as `/api/config` are appended to `ADMIN_ORIGIN`.
+
+In the HTTPS Nginx server, keep the trailing slashes on `proxy_pass` so Nginx
+strips each external prefix before forwarding:
+
+```nginx
+location = /mockman { return 301 /mockman/; }
+location /mockman/ {
+    proxy_pass http://dashboard:80/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location /mockman-api/ {
+    proxy_pass http://app:8080/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location /mockman-mock/ {
+    proxy_pass http://app:9091/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+The proxy must share a Docker network with `app` and `dashboard` for these service
+names to resolve. The browser calls the public HTTPS URLs, never Docker service
+names. Keep your existing forwarding headers and other service locations.
+
+Build the updated dashboard image once (`docker compose build dashboard`), then
+apply settings with `docker compose up -d`. For release deployments, publish and
+pull an updated dashboard image containing this support before running
+`docker compose -f compose.release.yaml up -d`. Subsequent public API URL
+changes only require recreating containers; mount-path changes belong in the
+external proxy configuration. Neither requires rebuilding the dashboard.
+The same image supports root hosting and proxy subpaths using relative asset
+URLs. No dashboard base-path setting is needed. The startup script only generates
+public API URLs in `runtime-config.js`; it does not modify HTML or Nginx rules.
+
+The external proxy owns the mount path: redirect `/mockman` to `/mockman/` and
+strip `/mockman/` before forwarding to the dashboard container. The trailing
+slash is required for relative asset URLs. This applies to the current dashboard,
+which has no nested browser routes; introducing client-side routing will require
+explicit handling of its base path. Direct Vite development continues at `/`.
+
+To check a running dashboard image without changing backend data, run from
+`frontend/` (API calls are mocked by the test):
+
+```sh
+DEPLOYMENT_URL=http://127.0.0.1:5173/mockman/ npx playwright test --config playwright.deployment.config.ts
+```
+
 ## Mocking controls and feature import
 
 The feature switch pauses every endpoint in the selected feature while preserving

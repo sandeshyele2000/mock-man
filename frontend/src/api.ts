@@ -16,11 +16,14 @@ export async function api<T>(
   method = "GET",
   body?: unknown,
 ): Promise<T> {
-  const r = await fetch(new URL(path, API_BASE_URL), {
-    method,
-    headers: { "Content-Type": "application/json", "X-Mockman-Admin": "1" },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  });
+  const r = await fetch(
+    new URL(path.replace(/^\/+/, ""), `${API_BASE_URL.replace(/\/+$/, "")}/`),
+    {
+      method,
+      headers: { "Content-Type": "application/json", "X-Mockman-Admin": "1" },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    },
+  );
   const data = await r.json();
   if (!r.ok) throw Error(data.error || `Request failed (${r.status})`);
   return data;
