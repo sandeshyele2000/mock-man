@@ -1,9 +1,10 @@
 // Created by Sandesh
 import Editor, { loader } from "@monaco-editor/react";
-import { typescript } from "monaco-editor";
-import * as monaco from "../../node_modules/monaco-editor/esm/vs/editor/editor.api.js";
+import * as monaco from "monaco-editor";
 import editorWorker from "../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker";
 import tsWorker from "../../node_modules/monaco-editor/esm/vs/language/typescript/ts.worker.js?worker";
+
+const { typescript } = monaco;
 
 type Props = {
   value: string;
@@ -89,7 +90,7 @@ declare const _: MockmanLodash;
 declare const moment: MockmanMomentFactory;
 `;
 
-loader.config({ monaco: monaco as typeof import("monaco-editor") });
+loader.config({ monaco });
 
 const workerGlobal = globalThis as typeof globalThis & {
   MonacoEnvironment?: {

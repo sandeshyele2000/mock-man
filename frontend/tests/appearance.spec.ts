@@ -151,10 +151,13 @@ test("dark workspace contrast, search recovery, pause feedback and mobile contro
   await expect(
     page.locator(".monaco-editor .monaco-editor-background").first(),
   ).toHaveCSS("background-color", "rgb(8, 19, 34)", { timeout: 30000 });
-  const editorInput = page.locator(".monaco-editor textarea.inputarea");
+  const editorInput = page.getByRole("textbox", {
+    name: "JavaScript code",
+    exact: true,
+  });
   const setCode = async (code: string) => {
     await editorInput.focus();
-    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.press("Control+A");
     await page.keyboard.insertText(code);
   };
   // Wait for the language worker to report a real syntax error before checking
@@ -169,7 +172,9 @@ test("dark workspace contrast, search recovery, pause feedback and mobile contro
   await expect(page.locator(".monaco-editor .squiggly-error")).toHaveCount(0, {
     timeout: 30000,
   });
-  await setCode("return { responseId: notARealVariable };");
+  await setCode(
+    "const missing = notARealVariable;\nreturn { responseId: missing };",
+  );
   await expect(
     page.locator(".monaco-editor .squiggly-error").first(),
   ).toBeVisible({ timeout: 30000 });
