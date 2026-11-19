@@ -1,5 +1,42 @@
 # Mockman
 
+## Run published images (no source checkout)
+
+Copy `compose.release.yaml` and `.env.release.example` to a deployment folder on
+the host. Install and start Docker, then copy `.env.release.example` to `.env`.
+Set `PUBLIC_HOST` to the host's VPN hostname/IP and choose the published ports.
+`MOCKMAN_VERSION` selects the backend/dashboard image tag (initially `1.0.0`).
+
+For deployment without a registry login, make both GHCR packages
+(`mockman-backend` and `mockman-dashboard`) public once. In the publisher's
+GitHub profile, open **Packages**, select each package, then open
+**Package settings → Danger Zone → Change visibility → Public** and confirm
+with the package name. Package visibility is separate from repository visibility;
+GitHub does not allow a public package to become private again.
+
+After both packages are public, deployment hosts run the commands below without
+`docker login` or a GitHub token. Authentication is still required to publish
+new image versions. Registry credentials do not belong in the deployment `.env`.
+
+```sh
+cp .env.release.example .env
+# Edit .env before starting.
+docker compose -f compose.release.yaml config --quiet
+docker compose -f compose.release.yaml pull
+docker compose -f compose.release.yaml up -d
+docker compose -f compose.release.yaml ps
+```
+
+Open `http://<PUBLIC_HOST>:<DASHBOARD_PORT>`. No Go, Node.js, Dockerfiles, or
+source code are required on this host. The release file sets the Compose project
+name to `mockman` so its database volume remains consistent across folder moves.
+Services restart when Docker restarts; Docker itself must be running.
+
+For an update, publish both images under the new version tag, change
+`MOCKMAN_VERSION` in `.env`, and run `pull` followed by `up -d` again. Host/port
+changes need only `up -d`. Stop with `docker compose -f compose.release.yaml down`;
+avoid `down -v` unless you intend to delete the database volume.
+
 ## Run with Docker Compose
 
 Install Docker with Compose, then run from the repository root:

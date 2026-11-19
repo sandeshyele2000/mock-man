@@ -4,6 +4,7 @@ frontend/test-results/
 frontend/playwright-report/
 /mockman
 .env
+github.env
 *.log
 .DS_Store
 frontend/*.tsbuildinfo
