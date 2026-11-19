@@ -129,7 +129,7 @@ function configureJavaScript() {
       "editorSuggestWidget.background": "#14253A",
       "editorSuggestWidget.foreground": "#E8EDEB",
       "editorSuggestWidget.selectedBackground": "#07362F",
-      focusBorder: "#00ED64",
+      focusBorder: "#92A5BD",
     },
   });
   const defaults = typescript.javascriptDefaults;

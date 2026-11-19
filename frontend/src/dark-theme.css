@@ -3,6 +3,7 @@
 html[data-theme="dark"],
 body:has(.app[data-theme="dark"]),
 .app[data-theme="dark"] {
+  --focus-color: #92a5bd;
   --dark-bg: #07121f;
   --dark-surface: #0d1b2b;
   --dark-raised: #14253a;
@@ -149,10 +150,6 @@ body:has(.app[data-theme="dark"]),
   background: var(--dark-raised);
   border-color: var(--dark-border);
   color: var(--dark-text);
-}
-.app[data-theme="dark"] :is(.search, .list-search):focus-within {
-  border-color: var(--dark-accent);
-  box-shadow: 0 0 0 3px #00ed6418;
 }
 .app[data-theme="dark"] :is(.search input, .list-search input) {
   color: var(--dark-text);
@@ -359,15 +356,6 @@ body:has(.app[data-theme="dark"]) .select-item[data-highlighted] {
 .app[data-theme="dark"] [data-slot="button"][data-variant="destructive"]:hover {
   background: #4b2937;
 }
-.app[data-theme="dark"]
-  :is(button, input, textarea, summary, a, .select-trigger):focus-visible,
-body:has(.app[data-theme="dark"]) .select-item:focus-visible {
-  outline: 2px solid var(--dark-accent);
-  outline-offset: 3px;
-}
-.app[data-theme="dark"] .toggle input:focus-visible + span {
-  outline-color: var(--dark-accent);
-}
 .app[data-theme="dark"] .sidebar-toggle {
   opacity: 1;
 }
@@ -396,9 +384,6 @@ body:has(.app[data-theme="dark"]) .select-item:focus-visible {
   border-color: var(--dark-border);
 }
 
-.app[data-theme="dark"] .workspace-content:focus-visible {
-  outline-color: var(--dark-accent);
-}
 .app[data-theme="dark"] .json-key {
   color: #8cc8ff;
 }
