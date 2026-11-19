@@ -1,4 +1,5 @@
 // Created by Sandesh
+// Geometric M recreated from the supplied logo reference.
 export function MockmanMark({
   size = 24,
   className,
@@ -12,19 +13,12 @@ export function MockmanMark({
       className={className}
       width={size}
       height={size}
-      viewBox="0 0 24 24"
-      fill="none"
+      viewBox="0 0 400 400"
+      fill="currentColor"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <path
-        d="M4.5 18V6l7.5 7 7.5-7v12"
-        stroke="currentColor"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="4.5" cy="5.5" r="1.5" fill="currentColor" />
-      <circle cx="19.5" cy="5.5" r="1.5" fill="currentColor" />
+      <path d="M12 25H102L201 124 300 25H389V66H318L201 183 85 66H54V333H96V255L138 297V375H12Z" />
+      <path d="M96 138L201 242 335 108H389V375H263V297L305 255V333H347V156L201 301 96 196Z" />
     </svg>
   );
 }
