@@ -466,3 +466,78 @@ test("sidebar alignment and large response preview support editing and deletion"
     animations: "disabled",
   });
 });
+
+test("feature drops distinguish missing files from multiple files and read file items", async ({
+  page,
+}) => {
+  let config = structuredClone(fixture);
+  await page.route("**/api/**", async (route) => {
+    const isConfig = new URL(route.request().url()).pathname === "/api/config";
+    if (isConfig && route.request().method() === "PUT")
+      config = {
+        ...route.request().postDataJSON(),
+        version: config.version + 1,
+      };
+    await route.fulfill({ json: isConfig ? config : [] });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Add feature", exact: true }).click();
+  const zone = page.getByLabel("Import feature drop zone");
+  const dialog = page.getByRole("dialog");
+  const drop = async (
+    kind: "link" | "multiple" | "items" | "file",
+    name: string,
+  ) => {
+    const data = await page.evaluateHandle(
+      ({ kind, bundle }) => {
+        const transfer = new DataTransfer();
+        if (kind === "link") {
+          transfer.setData("text/uri-list", "file:///tmp/feature.json");
+        } else {
+          transfer.items.add(
+            new File([bundle], "feature.json", { type: "application/json" }),
+          );
+          if (kind === "multiple")
+            transfer.items.add(
+              new File([bundle], "second.json", { type: "application/json" }),
+            );
+          if (kind === "items")
+            Object.defineProperty(transfer, "files", { value: [] });
+        }
+        return transfer;
+      },
+      {
+        kind,
+        bundle: JSON.stringify({
+          format: "mockman-feature",
+          version: 1,
+          feature: { ...fixture.projects[0].features[0], name },
+        }),
+      },
+    );
+    await zone.dispatchEvent("drop", { dataTransfer: data });
+    await data.dispose();
+  };
+  await drop("link", "Unused");
+  await expect(dialog.getByRole("alert")).toContainText(
+    "No file was received.",
+  );
+  await expect(dialog.getByRole("alert")).not.toContainText("one feature JSON");
+  await drop("multiple", "Unused");
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "Drop one feature JSON file at a time.",
+  );
+  expect(config.projects[0].features).toHaveLength(1);
+  await drop("items", "Imported file items");
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Imported file items." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Add feature", exact: true }).click();
+  await drop("file", "Imported native file");
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Imported native file." }),
+  ).toBeVisible();
+  expect(config.projects[0].features).toHaveLength(3);
+});

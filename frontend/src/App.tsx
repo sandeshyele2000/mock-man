@@ -1746,16 +1746,32 @@ export default function App() {
               aria-label="Import feature drop zone"
               onDragOver={(event) => {
                 event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
                 setImportDragging(true);
               }}
               onDragLeave={() => setImportDragging(false)}
               onDrop={(event) => {
                 event.preventDefault();
+                event.stopPropagation();
                 setImportDragging(false);
-                if (!save.isPending) {
-                  if (event.dataTransfer.files.length !== 1)
-                    setError("Drop one feature JSON file at a time.");
-                  else void importFeature(event.dataTransfer.files[0]);
+                if (save.isPending) return;
+                // Read synchronously while the drop event's file data is accessible.
+                const files = Array.from(event.dataTransfer.files);
+                if (files.length === 0) {
+                  for (const item of Array.from(event.dataTransfer.items)) {
+                    if (item.kind !== "file") continue;
+                    const file = item.getAsFile();
+                    if (file) files.push(file);
+                  }
+                }
+                if (files.length === 0) {
+                  setError(
+                    "No file was received. Drag the JSON file from Finder or File Explorer, or click Import feature to choose it.",
+                  );
+                } else if (files.length > 1) {
+                  setError("Drop one feature JSON file at a time.");
+                } else {
+                  void importFeature(files[0]);
                 }
               }}
             >
