@@ -333,7 +333,7 @@ export function ResponseForm({
             type="number"
             required
             min={0}
-            max={30000}
+            max={90000}
             value={delay}
             onChange={(e) => setDelay(+e.target.value)}
           />
