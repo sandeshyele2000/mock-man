@@ -166,9 +166,13 @@ pre {
 }
 .feature-nav .count {
   margin-left: auto;
+  flex-shrink: 0;
   font-weight: 400;
   font-size: 12px;
   color: #8e9a89;
+}
+.feature-nav > svg {
+  flex-shrink: 0;
 }
 .endpoint-nav {
   gap: 9px;
@@ -1734,6 +1738,8 @@ button:not(:disabled):hover {
   opacity: 0.6;
 }
 .feature-nav > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
