@@ -1,5 +1,6 @@
 // Created by Sandesh
 import { ADMIN_HOST, MOCK_HOST, MOCK_SERVER_URL } from "./config";
+import { generateId } from "./id";
 import {
   Modal,
   EntityForm,
@@ -269,7 +270,7 @@ export default function App() {
           );
         }
         return new Map(
-          values.map((value) => [value, crypto.randomUUID().slice(0, 8)]),
+          values.map((value) => [value, generateId()]),
         );
       };
       const requireMappedID = (
@@ -290,7 +291,7 @@ export default function App() {
       );
       const importedFeature: Feature = {
         ...feature,
-        id: crypto.randomUUID().slice(0, 8),
+        id: generateId(),
         endpoints: feature.endpoints.map((endpoint) => {
           const responseIDs = createIDMap(
             endpoint.responses.map((response) => response.id),
@@ -461,13 +462,13 @@ export default function App() {
             "The export contains an invalid or duplicate response.",
           );
         }
-        const importedID = crypto.randomUUID().slice(0, 8);
+        const importedID = generateId();
         ids.set(response.id, importedID);
         return { ...response, id: importedID };
       });
       const importedScenario: Scenario = {
         ...scenario,
-        id: crypto.randomUUID().slice(0, 8),
+        id: generateId(),
         revision: "",
         ...(scenario.code
           ? {

@@ -29,7 +29,7 @@ import {
 import { Button } from "./ui/button";
 import { JsonPreview } from "./JsonPreview";
 import { SelectField } from "./ui/select";
-const id = () => crypto.randomUUID().slice(0, 8);
+import { generateId as id } from "../id";
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 export const behaviors = {
   always: "Always return",
