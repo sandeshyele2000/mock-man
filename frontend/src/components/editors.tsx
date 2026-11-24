@@ -165,7 +165,7 @@ export function EntityForm({
   const [method, setMethod] = useState<Endpoint["method"]>(e?.method || "GET");
   const [path, setPath] = useState(e?.path || "/v1/");
   const [envs, setEnvs] = useState(
-    (value as Project)?.environments?.join(", ") || "development, staging",
+    (value as Project)?.environments?.join(", ") || "development",
   );
   return (
     <Form
