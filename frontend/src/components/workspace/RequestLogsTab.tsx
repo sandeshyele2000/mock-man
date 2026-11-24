@@ -23,7 +23,7 @@ export function RequestLogsTab({
       <div className="section-heading">
         <div>
           <h3>Request activity</h3>
-          <p>Matched requests · refreshes every 2 seconds</p>
+          <p>Matched requests · click Refresh to load the latest activity</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void onRefresh()}>
           <RotateCcw size={13} />

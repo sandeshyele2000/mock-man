@@ -81,7 +81,6 @@ export default function App() {
         `/api/logs?project=${encodeURIComponent(selectedProject!.id)}&environment=${encodeURIComponent(activeEnvironment)}`,
       ),
     enabled: !!selectedProject,
-    refetchInterval: 2000,
   });
   const save = useMutation({
     mutationFn: (next: Config) => api<Config>("/api/config", "PUT", next),

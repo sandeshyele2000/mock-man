@@ -8,5 +8,5 @@ github.env
 *.log
 .DS_Store
 frontend/*.tsbuildinfo
-
+/frontend/dist/
 /node_modules/
