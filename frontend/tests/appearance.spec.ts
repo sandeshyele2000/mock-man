@@ -319,8 +319,10 @@ test("feature actions stay fixed while scenarios scroll and JSON previews are hi
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 });
     if (width === 390) {
+      await page.getByRole("button", { name: "Open navigation" }).click();
       await page.locator(".feature-nav").first().scrollIntoViewIfNeeded();
       await expect(page.locator(".feature-nav").first()).toBeInViewport();
+      await page.keyboard.press("Escape");
     }
     await content.evaluate((element) => {
       element.scrollTop = 0;
@@ -540,6 +542,8 @@ test("feature drops distinguish missing files from multiple files and read file 
     page.getByRole("heading", { name: "Imported native file." }),
   ).toBeVisible();
   expect(config.projects[0].features).toHaveLength(3);
+  await expect(page.locator(".feature-nav.selected")).toHaveCount(1);
+  await expect(page.locator(".endpoint-nav.current")).toHaveCount(1);
 });
 
 test("sidebar resizing reveals feature names and preserves width across collapse and reload", async ({
@@ -603,19 +607,156 @@ test("sidebar resizing reveals feature names and preserves width across collapse
   await expect(sidebar).toHaveCSS("width", "244px");
   for (const width of [1280, 1000, 700]) {
     await page.setViewportSize({ width, height: 844 });
+    if (width <= 1024) {
+      await page.getByRole("button", { name: "Open navigation" }).click();
+      await expect(handle).toHaveCount(0);
+      await expect(sidebar).toHaveCSS("width", "320px");
+    }
     const brand = page.locator(".sidebar-header .brand-name");
     await expect(brand).toBeVisible();
     expect(
-      await brand.evaluate((element) => element.scrollWidth > element.clientWidth),
+      await brand.evaluate(
+        (element) => element.scrollWidth > element.clientWidth,
+      ),
     ).toBe(false);
+    if (width <= 1024) await page.keyboard.press("Escape");
   }
-  await page.keyboard.press("End");
-  await page.setViewportSize({ width: 700, height: 844 });
-  await expect(sidebar).toHaveCSS("width", "350px");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(handle).toBeHidden();
-  await expect(sidebar).toHaveCSS("width", "390px");
+  await expect(sidebar).not.toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+});
+
+for (const width of [360, 390, 768, 1024]) {
+  test(`responsive navigation, editing and theme favicon at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const config = structuredClone(fixture);
+    const feature = config.projects[0].features[0];
+    feature.endpoints.push({
+      ...structuredClone(feature.endpoints[0]),
+      id: "second",
+      name: "Another endpoint with a longer name",
+      path: "/v1/another-endpoint-with-a-longer-path",
+    });
+    await page.route("**/api/**", async (route) => {
+      await route.fulfill({
+        json:
+          new URL(route.request().url()).pathname === "/api/config"
+            ? config
+            : [],
+      });
+    });
+    await page.goto("/");
+    const navigation = page.getByRole("button", {
+      name: "Open navigation",
+      exact: true,
+    });
+    await expect(navigation).toBeVisible();
+    await expect(page.locator(".sidebar")).not.toBeVisible();
+    await expect(page.locator(".endpoint-list")).toBeVisible();
+    await navigation.click();
+    const drawer = page.getByRole("dialog", { name: "Workspace navigation" });
+    await expect(drawer).toBeVisible();
+    await page.locator(".feature-nav").click();
+    await page.locator(".endpoint-nav").last().click();
+    await expect(drawer).toHaveCount(0);
+    await expect(page.locator(".detail-subheading h2")).toHaveText(
+      "Another endpoint with a longer name",
+    );
+    await expect(navigation).toBeFocused();
+    await navigation.click();
+    await page.keyboard.press("Escape");
+    await expect(navigation).toBeFocused();
+    await expect(page.locator(".sidebar")).not.toBeVisible();
+    for (const theme of ["dark", "light"] as const) {
+      await page
+        .getByRole("button", { name: `Switch to ${theme} mode` })
+        .click();
+      const favicon = page.locator("link[data-theme-icon]");
+      await expect(favicon).toHaveAttribute("href", `./favicon-${theme}.svg`);
+      const response = await page.request.get(
+        (await favicon.getAttribute("href"))!,
+      );
+      expect(response.ok()).toBeTruthy();
+      expect(await response.text()).toContain(
+        theme === "dark" ? "#a5b4fc" : "#4f46e5",
+      );
+      const dimensions = await page
+        .locator(".workspace-content")
+        .evaluate((element) => ({
+          scroll: element.scrollWidth,
+          client: element.clientWidth,
+        }));
+      expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client + 1);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width);
+      await page.screenshot({
+        path: `test-results/responsive-${width}-${theme}.png`,
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await expect(page.locator(".endpoint-item.active")).toHaveCSS(
+      "box-shadow",
+      "none",
+    );
+    await page
+      .getByRole("button", { name: "New endpoint", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    const dimensions = await dialog.evaluate((element) => ({
+      scroll: element.scrollWidth,
+      client: element.clientWidth,
+    }));
+    expect(dimensions.scroll).toBeLessThanOrEqual(dimensions.client + 1);
+    await page.getByRole("button", { name: "Close dialog" }).click();
+    await page.getByRole("tab", { name: /^Scenarios/ }).click();
+    await expect(page.locator(".scenario-card.is-active")).toHaveCSS(
+      "border-left-color",
+      "rgb(199, 205, 251)",
+    );
+  });
+}
+
+test("tab searches persist through tab and endpoint changes", async ({
+  page,
+}) => {
+  const config = structuredClone(fixture);
+  const feature = config.projects[0].features[0];
+  feature.endpoints.push({
+    ...structuredClone(feature.endpoints[0]),
+    id: "second",
+    name: "Second endpoint",
+    path: "/second",
+  });
+  await page.route("**/api/**", (route) =>
+    route.fulfill({
+      json:
+        new URL(route.request().url()).pathname === "/api/config" ? config : [],
+    }),
+  );
+  await page.goto("/");
+  await page.getByLabel("Search responses").fill("Temporary");
+  await expect(page.locator(".response-card")).toHaveCount(1);
+  await page.getByRole("tab", { name: /^Scenarios/ }).click();
+  await page.getByLabel("Search scenarios").fill("missing");
+  await expect(
+    page.getByRole("heading", { name: "No matching scenarios" }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: /^Responses/ }).click();
+  await expect(page.getByLabel("Search responses")).toHaveValue("Temporary");
+  await page.locator(".endpoint-item").last().click();
+  await expect(page.locator(".detail-subheading h2")).toHaveText(
+    "Second endpoint",
+  );
+  await expect(page.getByLabel("Search responses")).toHaveValue("Temporary");
+  await expect(page.locator(".response-card")).toHaveCount(1);
+  await page.getByRole("tab", { name: /^Scenarios/ }).click();
+  await expect(page.getByLabel("Search scenarios")).toHaveValue("missing");
 });

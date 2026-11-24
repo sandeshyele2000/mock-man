@@ -3,7 +3,8 @@
 @import "./theme.css";
 @theme {
   --font-sans:
-    "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Figtree Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 :root {
@@ -2103,7 +2104,6 @@ dialog.wide-modal:has(.response-viewer) > header {
 .endpoint-item.active {
   background: var(--accent-soft);
   color: var(--accent);
-  box-shadow: inset 2px 0 var(--accent);
 }
 .endpoint-item.active > b,
 .endpoint-nav.current {
@@ -2205,5 +2205,214 @@ body:has(.sidebar-resize-handle[data-resizing="true"]) {
 @media (max-width: 600px) {
   .sidebar-resize-handle {
     display: none;
+  }
+}
+
+/* Keep navigation and editing usable without squeezing the workspace on tablets. */
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(320px, 88vw);
+    max-height: none;
+    padding: 22px 16px;
+    overflow: auto;
+    z-index: 12;
+    visibility: hidden;
+    transform: translateX(-100%);
+    transition:
+      transform 180ms ease,
+      visibility 180ms;
+  }
+  .sidebar.navigation-open {
+    visibility: visible;
+    transform: translateX(0);
+  }
+  .navigation-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 11;
+    background: var(--backdrop);
+  }
+  .sidebar .sidebar-header {
+    margin-bottom: 24px;
+  }
+  .sidebar .sidebar-toggle,
+  .mobile-sidebar-toggle {
+    display: inline-flex;
+  }
+  .sidebar .workspace-label,
+  .sidebar .side-rule {
+    display: block;
+  }
+  .sidebar .side-heading,
+  .sidebar .project-actions {
+    display: flex;
+  }
+  .sidebar nav {
+    display: block;
+    flex: 1;
+    max-height: none;
+    overflow: auto;
+  }
+  .sidebar nav > div {
+    min-width: 0;
+    max-width: none;
+  }
+  .workspace,
+  .sidebar.collapsed ~ .workspace {
+    margin-left: 0;
+    height: 100dvh;
+  }
+  .topbar {
+    flex-wrap: nowrap;
+    min-height: 64px;
+    gap: 10px;
+    padding: 10px 16px;
+  }
+  .breadcrumb {
+    flex: 1;
+    min-width: 0;
+  }
+  .breadcrumb > span,
+  .breadcrumb > b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-context {
+    width: auto;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+  }
+  .top-context .select-trigger {
+    max-width: 145px;
+  }
+  .page-heading {
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .heading-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .content-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .endpoint-list {
+    display: block;
+  }
+  .endpoint-items {
+    min-height: 0;
+    max-height: 230px;
+    overflow: auto;
+  }
+  .card-heading,
+  .card-heading > div,
+  .detail-tools,
+  .detail-subheading,
+  .section-heading,
+  .scenario-import-actions,
+  .detail-bottom {
+    flex-wrap: wrap;
+  }
+  .card-heading > div,
+  .detail-subheading > h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .sidebar-resize-handle {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .workspace > main {
+    padding: 18px 12px 0;
+  }
+  .page-heading h1 {
+    overflow-wrap: anywhere;
+  }
+  .topbar .breadcrumb > span,
+  .topbar .breadcrumb > svg {
+    display: none;
+  }
+  .top-context .select-trigger {
+    max-width: 118px;
+  }
+  .overview > div {
+    min-width: 0;
+    padding: 0 8px;
+  }
+  .overview .stat-icon {
+    display: none;
+  }
+  .detail-heading,
+  .detail-subheading {
+    gap: 12px;
+  }
+  .detail-subheading > h2 {
+    flex: 1 1 100%;
+  }
+  .detail-tools {
+    margin-left: 0;
+  }
+  .section-heading > div {
+    min-width: 0;
+  }
+  .tabs button {
+    min-height: 44px;
+  }
+  .form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .condition {
+    grid-template-columns: minmax(0, 1fr) 40px;
+  }
+  .condition > :not(:last-child) {
+    grid-column: 1;
+  }
+  .condition > :last-child {
+    grid-column: 2;
+    grid-row: 1 / 4;
+  }
+  .field,
+  .field input,
+  .field textarea {
+    min-width: 0;
+  }
+  .response-viewer-meta {
+    flex-wrap: wrap;
+  }
+  .toast {
+    width: max-content;
+    max-width: calc(100vw - 24px);
+    overflow-wrap: anywhere;
+  }
+}
+@media (min-width: 768px) and (max-width: 1024px) {
+  .content-grid {
+    grid-template-columns: minmax(180px, 0.65fr) minmax(0, 1.6fr);
+    gap: 14px;
+  }
+  .endpoint-items {
+    max-height: 420px;
+  }
+}
+@media (max-width: 600px) {
+  .endpoint-list .panel-heading {
+    padding: 12px 14px;
+  }
+  .endpoint-items {
+    max-height: 150px;
+  }
+  .endpoint-item {
+    padding: 10px;
+  }
+  .endpoint-item > b {
+    margin: 6px 0 4px;
+  }
+  .endpoint-item small {
+    margin-top: 6px;
   }
 }

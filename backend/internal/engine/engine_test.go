@@ -90,6 +90,40 @@ func TestValidation(t *testing.T) {
 	}
 }
 
+func TestInboundMatchingRequiresMethod(t *testing.T) {
+	project := storage.Sample().Projects[0]
+	endpoint := project.Features[0].Endpoints[0]
+	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "PROPFIND"} {
+		t.Run(method, func(t *testing.T) {
+			match, err := engine.Select(project, "development", engine.Request{Method: method, Path: endpoint.Path})
+			if method != endpoint.Method {
+				if err != engine.ErrNoMatch {
+					t.Fatalf("wrong method matched: %+v %v", match, err)
+				}
+			} else if err != nil || match.Endpoint.ID != endpoint.ID {
+				t.Fatalf("configured method did not match: %+v %v", match, err)
+			}
+		})
+	}
+}
+
+func TestDuplicatePathsWithDifferentMethods(t *testing.T) {
+	config := storage.Sample()
+	endpoint := config.Projects[0].Features[0].Endpoints[0]
+	endpoint.ID = "different-method"
+	endpoint.Method = "GET"
+	config.Projects[0].Features[0].Endpoints = append(config.Projects[0].Features[0].Endpoints, endpoint)
+	if err := engine.Validate(config); err != nil {
+		t.Fatalf("different methods on the same path rejected: %v", err)
+	}
+	for _, candidate := range config.Projects[0].Features[0].Endpoints {
+		match, err := engine.Select(config.Projects[0], "development", engine.Request{Method: candidate.Method, Path: candidate.Path})
+		if err != nil || match.Endpoint.ID != candidate.ID {
+			t.Fatalf("method %s selected wrong endpoint: %+v %v", candidate.Method, match, err)
+		}
+	}
+}
+
 func TestPathValidation(t *testing.T) {
 	for _, path := range []string{"/users", "/v1/agreements/acceptances"} {
 		t.Run("accept "+path, func(t *testing.T) {

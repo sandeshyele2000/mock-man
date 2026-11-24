@@ -30,14 +30,9 @@ import { Button } from "./ui/button";
 import { JsonPreview } from "./JsonPreview";
 import { SelectField } from "./ui/select";
 import { generateId as id } from "../id";
+import { behaviors } from "../scenarioBehaviors";
+export { behaviors } from "../scenarioBehaviors";
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
-export const behaviors = {
-  always: "Always return",
-  failFirst: "Fail first N attempts",
-  failAfter: "Fail after N attempts",
-  sequence: "Response sequence",
-  javascript: "Custom",
-};
 const JavaScriptCodeEditor = lazy(() =>
   import("./JavaScriptCodeEditor").then((module) => ({
     default: module.JavaScriptCodeEditor,
