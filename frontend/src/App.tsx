@@ -96,6 +96,11 @@ export default function App() {
   const [scenarioSearch, setScenarioSearch] = useState("");
   const [modal, setModal] = useState<ModalState | null>(null);
   const [notice, setNotice] = useState("");
+  const [canCopy, setCanCopy] = useState(
+    () =>
+      window.isSecureContext &&
+      typeof navigator.clipboard?.writeText === "function",
+  );
   const [error, setError] = useState("");
   const scenarioImportRef = useRef<HTMLInputElement>(null);
   const featureImportRef = useRef<HTMLInputElement>(null);
@@ -283,9 +288,7 @@ export default function App() {
             `The export contains missing or duplicate ${label} IDs.`,
           );
         }
-        return new Map(
-          values.map((value) => [value, generateId()]),
-        );
+        return new Map(values.map((value) => [value, generateId()]));
       };
       const requireMappedID = (
         ids: Map<string, string>,
@@ -622,7 +625,7 @@ export default function App() {
       await navigator.clipboard.writeText(curl);
       setNotice("curl copied");
     } catch {
-      setError("Clipboard unavailable. Select and copy the curl text below.");
+      setCanCopy(false);
     }
   }
   if (config.isPending)
@@ -1665,14 +1668,16 @@ export default function App() {
                               <h3>Connect your application</h3>
                               <p>Keep your original path. Change the origin.</p>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => void copyCurl()}
-                            >
-                              <Copy size={13} />
-                              Copy curl
-                            </Button>
+                            {canCopy && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void copyCurl()}
+                              >
+                                <Copy size={13} />
+                                Copy curl
+                              </Button>
+                            )}
                           </div>
                           <pre className="curl">{curl}</pre>
                           <div className="info-box">

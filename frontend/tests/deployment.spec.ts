@@ -3,6 +3,61 @@ import { fixture } from "./fixture";
 
 test.skip(!process.env.DEPLOYMENT_URL, "Requires a built dashboard deployment");
 
+for (const access of ["unavailable", "allowed", "denied"] as const) {
+  test(`Copy curl handles ${access} clipboard access`, async ({ page }) => {
+    await page.route("**/api/**", (route) =>
+      route.fulfill({
+        json: new URL(route.request().url()).pathname.endsWith("/api/config")
+          ? fixture
+          : [],
+      }),
+    );
+    await page.addInitScript((mode) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value:
+          mode === "unavailable"
+            ? undefined
+            : {
+                writeText: (text: string) => {
+                  if (mode === "denied")
+                    return Promise.reject(
+                      new DOMException("Denied", "NotAllowedError"),
+                    );
+                  document.documentElement.dataset.copiedText = text;
+                  return Promise.resolve();
+                },
+              },
+      });
+    }, access);
+    await page.goto("./");
+    await page.getByRole("tab", { name: "Connect", exact: true }).click();
+    const curl = page.locator("pre.curl");
+    await expect(curl).toBeVisible();
+    const copy = page.getByRole("button", { name: "Copy curl", exact: true });
+    if (access === "unavailable") {
+      await expect(copy).toHaveCount(0);
+    } else {
+      await copy.click();
+      if (access === "denied") {
+        await expect(copy).toHaveCount(0);
+        await expect(
+          page.getByText("curl copied", { exact: true }),
+        ).toHaveCount(0);
+      } else {
+        await expect(copy).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute(
+          "data-copied-text",
+          (await curl.textContent())!,
+        );
+        await expect(
+          page.getByText("curl copied", { exact: true }),
+        ).toBeVisible();
+      }
+    }
+  });
+}
+
 test("deployment preserves mount paths for assets, API calls and editor workers", async ({
   page,
   baseURL,
