@@ -9,7 +9,7 @@ import {
   TryForm,
   behaviors,
 } from "./components/editors";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -58,6 +58,7 @@ import { Button } from "./components/ui/button";
 import { JsonPreview } from "./components/JsonPreview";
 import { SelectField } from "./components/ui/select";
 import { MockmanMark } from "./components/brand";
+import { SidebarResizeHandle } from "./components/SidebarResizeHandle";
 const pretty = (v: unknown) => JSON.stringify(v, null, 2);
 type ModalState =
   | { kind: "project"; value?: Project }
@@ -76,6 +77,16 @@ export default function App() {
   const [endpointID, setEndpointID] = useState("");
   const [environment, setEnvironment] = useState("development");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState<number | null>(() => {
+    const saved = Number(localStorage.getItem("mockman-sidebar-width"));
+    return Number.isFinite(saved) && saved >= 175 && saved <= 560
+      ? Math.max(244, saved)
+      : null;
+  });
+  useEffect(() => {
+    if (sidebarWidth !== null)
+      localStorage.setItem("mockman-sidebar-width", String(sidebarWidth));
+  }, [sidebarWidth]);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     localStorage.getItem("mockman-theme") === "dark" ? "dark" : "light",
   );
@@ -630,7 +641,18 @@ export default function App() {
       </div>
     );
   return (
-    <div className="app" data-theme={theme}>
+    <div
+      className="app"
+      data-theme={theme}
+      style={
+        {
+          "--sidebar-width":
+            sidebarWidth === null
+              ? undefined
+              : `clamp(244px, ${sidebarWidth}px, min(560px, 50vw))`,
+        } as CSSProperties
+      }
+    >
       <aside className={`sidebar ${sidebarCollapsed ? "collapsed" : ""}`}>
         <div className="sidebar-header">
           <a className="brand" href="./" aria-label="Mockman home">
@@ -729,6 +751,7 @@ export default function App() {
                 <div key={feature.id}>
                   <button
                     className={`feature-nav ${f?.id === feature.id ? "selected" : ""}`}
+                    title={feature.name}
                     aria-current={f?.id === feature.id ? "page" : undefined}
                     aria-expanded={expandedFeatureID === feature.id}
                     onClick={() => {
@@ -779,6 +802,9 @@ export default function App() {
               ))}
             </nav>
           </>
+        )}
+        {!sidebarCollapsed && (
+          <SidebarResizeHandle onResize={setSidebarWidth} />
         )}
       </aside>
       <div className="workspace">

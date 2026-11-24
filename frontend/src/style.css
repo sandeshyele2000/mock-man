@@ -55,7 +55,7 @@ pre {
   overflow: hidden;
 }
 .sidebar {
-  width: 244px;
+  width: var(--sidebar-width, 244px);
   flex-shrink: 0;
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -193,7 +193,7 @@ pre {
   min-width: 29px;
 }
 .workspace {
-  margin-left: 244px;
+  margin-left: var(--sidebar-width, 244px);
   flex: 1;
   min-width: 0;
 }
@@ -1256,12 +1256,12 @@ form footer > span {
 }
 @media (max-width: 1150px) {
   .sidebar {
-    width: 210px;
+    width: var(--sidebar-width, 244px);
     padding-left: 12px;
     padding-right: 12px;
   }
   .workspace {
-    margin-left: 210px;
+    margin-left: var(--sidebar-width, 244px);
   }
   main {
     padding: 28px 22px;
@@ -1301,10 +1301,10 @@ form footer > span {
 }
 @media (max-width: 850px) {
   .sidebar {
-    width: 175px;
+    width: var(--sidebar-width, 244px);
   }
   .workspace {
-    margin-left: 175px;
+    margin-left: var(--sidebar-width, 244px);
   }
   .brand {
     font-size: 21px;
@@ -2168,4 +2168,42 @@ dialog.wide-modal:has(.response-viewer) > header {
 button[data-slot="button"] {
   font-weight: 600;
   border-radius: 7px;
+}
+
+/* A generous hit area keeps the thin resize edge easy to grab. */
+.sidebar-resize-handle {
+  position: absolute;
+  inset: 0 -4px 0 auto;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  transition: background-color 150ms;
+}
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.sidebar-resize-handle[data-resizing="true"]::after {
+  background: var(--highlight);
+}
+.sidebar-resize-handle:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: -2px;
+}
+.sidebar:has(.sidebar-resize-handle[data-resizing="true"]) {
+  transition: none;
+}
+body:has(.sidebar-resize-handle[data-resizing="true"]) {
+  cursor: col-resize;
+  user-select: none;
+}
+@media (max-width: 600px) {
+  .sidebar-resize-handle {
+    display: none;
+  }
 }

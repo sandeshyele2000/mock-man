@@ -541,3 +541,81 @@ test("feature drops distinguish missing files from multiple files and read file 
   ).toBeVisible();
   expect(config.projects[0].features).toHaveLength(3);
 });
+
+test("sidebar resizing reveals feature names and preserves width across collapse and reload", async ({
+  page,
+}) => {
+  const config = structuredClone(fixture);
+  const name = "Agreement acceptance lifecycle";
+  config.projects[0].features[0].name = name;
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await page.route("**/api/**", (route) =>
+    route.fulfill({
+      json:
+        new URL(route.request().url()).pathname === "/api/config" ? config : [],
+    }),
+  );
+  await page.goto("/");
+  const sidebar = page.locator(".sidebar");
+  const handle = page.getByRole("separator", { name: "Resize sidebar" });
+  const label = page.locator(".feature-nav > span:nth-child(2)").first();
+  await expect(handle).toBeVisible();
+  expect(
+    await label.evaluate(
+      (element) => element.scrollWidth > element.clientWidth,
+    ),
+  ).toBe(true);
+  await expect(page.locator(".feature-nav").first()).toHaveAttribute(
+    "title",
+    name,
+  );
+  const before = (await sidebar.boundingBox())!;
+  const edge = (await handle.boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, 300);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + edge.width / 2 + 200, 300, { steps: 10 });
+  await page.mouse.up();
+  await expect(sidebar).toHaveCSS("width", `${before.width + 200}px`);
+  expect(
+    await label.evaluate(
+      (element) => element.scrollWidth > element.clientWidth,
+    ),
+  ).toBe(false);
+  const workspace = (await page.locator(".workspace").boundingBox())!;
+  expect(workspace.x).toBeCloseTo(before.width + 200, 0);
+  await page
+    .getByRole("button", { name: "Collapse sidebar", exact: true })
+    .click();
+  await expect(sidebar).toHaveCSS("width", "72px");
+  await expect(handle).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Expand sidebar", exact: true })
+    .click();
+  await expect(sidebar).toHaveCSS("width", `${before.width + 200}px`);
+  await page.reload();
+  await expect(sidebar).toHaveCSS("width", `${before.width + 200}px`);
+  await handle.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(sidebar).toHaveCSS("width", `${before.width + 210}px`);
+  await page.keyboard.press("End");
+  await expect(sidebar).toHaveCSS("width", "560px");
+  await page.keyboard.press("Home");
+  await expect(sidebar).toHaveCSS("width", "244px");
+  for (const width of [1280, 1000, 700]) {
+    await page.setViewportSize({ width, height: 844 });
+    const brand = page.locator(".sidebar-header .brand-name");
+    await expect(brand).toBeVisible();
+    expect(
+      await brand.evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(false);
+  }
+  await page.keyboard.press("End");
+  await page.setViewportSize({ width: 700, height: 844 });
+  await expect(sidebar).toHaveCSS("width", "350px");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(handle).toBeHidden();
+  await expect(sidebar).toHaveCSS("width", "390px");
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+});
