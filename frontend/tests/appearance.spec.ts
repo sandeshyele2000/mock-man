@@ -26,7 +26,7 @@ test("dark workspace contrast, search recovery, pause feedback and mobile contro
   await expect(page.getByLabel("Global mocking")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "New endpoint", exact: true }),
-  ).toHaveCSS("background-color", "rgb(0, 237, 100)");
+  ).toHaveCSS("background-color", "rgb(165, 180, 252)");
   // Check actual computed colors, so cascade mistakes fail this check.
   const contrasts = await page.evaluate(() => {
     const luminance = (color: string) => {
@@ -92,7 +92,7 @@ test("dark workspace contrast, search recovery, pause feedback and mobile contro
   await page.getByRole("option", { name: "Custom", exact: true }).click();
   await expect(
     page.locator(".monaco-editor .monaco-editor-background").first(),
-  ).toHaveCSS("background-color", "rgb(8, 19, 34)", { timeout: 30000 });
+  ).toHaveCSS("background-color", "rgb(20, 23, 31)", { timeout: 30000 });
   const editorInput = page.getByRole("textbox", {
     name: "JavaScript code",
     exact: true,
@@ -281,7 +281,7 @@ test("feature actions stay fixed while scenarios scroll and JSON previews are hi
   await expect(heading).toBeVisible();
   await expect(page.locator(".app")).toHaveCSS(
     "background-color",
-    "rgb(7, 18, 31)",
+    "rgb(16, 18, 24)",
   );
   const preview = page.locator(".response-card .json-preview").first();
   await expect(preview).toHaveText(
@@ -299,11 +299,11 @@ test("feature actions stay fixed while scenarios scroll and JSON previews are hi
   }
   await expect(preview.locator(".json-key").first()).toHaveCSS(
     "color",
-    "rgb(140, 200, 255)",
+    "rgb(159, 197, 255)",
   );
   await expect(preview.locator(".json-string").first()).toHaveCSS(
     "color",
-    "rgb(163, 230, 186)",
+    "rgb(146, 216, 180)",
   );
   expect(await page.evaluate(() => "__previewRan" in window)).toBe(false);
   await preview.scrollIntoViewIfNeeded();
