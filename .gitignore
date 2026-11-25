@@ -10,3 +10,6 @@ github.env
 frontend/*.tsbuildinfo
 /frontend/dist/
 /node_modules/
+
+/release/
+/backend/internal/dashboard/dist/

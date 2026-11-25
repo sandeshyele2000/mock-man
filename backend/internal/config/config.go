@@ -23,6 +23,7 @@ type Config struct {
 	AdminAddr          string   `env:"ADMIN_ADDR"`
 	AdminOrigin        string   `env:"ADMIN_ORIGIN"`
 	DashboardOrigin    string   `env:"DASHBOARD_ORIGIN"`
+	MockOrigin         string   `env:"MOCK_ORIGIN"`
 	MockAddr           string   `env:"MOCK_ADDR"`
 	MockAllowedOrigins []string `env:"MOCK_ALLOWED_ORIGINS" envSeparator:","`
 }
@@ -57,6 +58,9 @@ func Load() (Config, error) {
 	}
 	if cfg.DashboardOrigin == "" {
 		cfg.DashboardOrigin = "http://" + net.JoinHostPort(cfg.PublicHost, strconv.Itoa(cfg.DashboardPort))
+	}
+	if cfg.MockOrigin == "" {
+		cfg.MockOrigin = "http://" + net.JoinHostPort(cfg.PublicHost, strconv.Itoa(cfg.MockPort))
 	}
 	return cfg, nil
 }

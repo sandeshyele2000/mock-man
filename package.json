@@ -9,6 +9,7 @@
   "scripts": {
     "postinstall": "npm --prefix frontend ci",
     "dev": "docker compose up -d --wait && node scripts/dev.mjs",
+    "build:native": "sh scripts/native.sh build",
     "build": "npm --prefix frontend ci && npm --prefix frontend run build && go -C backend build -o ../mockman ./cmd/mockman"
   }
 }

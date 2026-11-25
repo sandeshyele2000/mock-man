@@ -7,7 +7,7 @@ import (
 
 func TestSharedHostAndPorts(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"ADMIN_ADDR", "MOCK_ADDR", "ADMIN_ORIGIN", "DASHBOARD_ORIGIN"} {
+	for _, key := range []string{"ADMIN_ADDR", "MOCK_ADDR", "ADMIN_ORIGIN", "DASHBOARD_ORIGIN", "MOCK_ORIGIN"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("PUBLIC_HOST", "studio.vpn")
@@ -19,7 +19,7 @@ func TestSharedHostAndPorts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.AdminAddr != "0.0.0.0:18080" || cfg.MockAddr != "0.0.0.0:19091" || cfg.AdminOrigin != "http://studio.vpn:18080" || cfg.DashboardOrigin != "http://studio.vpn:15173" {
+	if cfg.AdminAddr != "0.0.0.0:18080" || cfg.MockAddr != "0.0.0.0:19091" || cfg.AdminOrigin != "http://studio.vpn:18080" || cfg.DashboardOrigin != "http://studio.vpn:15173" || cfg.MockOrigin != "http://studio.vpn:19091" {
 		t.Fatalf("unexpected configuration: %+v", cfg)
 	}
 	t.Setenv("ADMIN_ADDR", "127.0.0.1:18081")
@@ -27,16 +27,17 @@ func TestSharedHostAndPorts(t *testing.T) {
 	if err != nil || cfg.AdminOrigin != "http://127.0.0.1:18081" {
 		t.Fatalf("legacy address override: %+v, %v", cfg, err)
 	}
+	t.Setenv("MOCK_ORIGIN", "https://public.example.com/mockman-mock/")
 	t.Setenv("ADMIN_ORIGIN", "https://admin.example.com")
 	cfg, err = Load()
-	if err != nil || cfg.AdminOrigin != "https://admin.example.com" {
+	if err != nil || cfg.AdminOrigin != "https://admin.example.com" || cfg.MockOrigin != "https://public.example.com/mockman-mock/" {
 		t.Fatalf("public override: %+v, %v", cfg, err)
 	}
 }
 
 func TestDotEnvAndInvalidPort(t *testing.T) {
 	t.Chdir(t.TempDir())
-	for _, key := range []string{"ADMIN_ADDR", "MOCK_ADDR", "ADMIN_ORIGIN", "DASHBOARD_ORIGIN"} {
+	for _, key := range []string{"ADMIN_ADDR", "MOCK_ADDR", "ADMIN_ORIGIN", "DASHBOARD_ORIGIN", "MOCK_ORIGIN"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("ADMIN_PORT", "0")

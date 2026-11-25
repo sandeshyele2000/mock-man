@@ -1,5 +1,76 @@
 # Mockman
 
+## Native deployment (no Docker)
+
+Build a single Go binary containing the dashboard:
+
+```sh
+npm run build:native
+# Cross-build for an Apple Silicon Mac if needed:
+# GOOS=darwin GOARCH=arm64 npm run build:native
+# Use GOARCH=amd64 for an Intel Mac.
+```
+
+Building requires Node.js 24+ and the Go toolchain specified in `backend/go.mod`.
+Copy the generated `release/` directory to the target host. The target only needs
+native PostgreSQL; the Go binary contains all dashboard assets. PostgreSQL manages
+its own worker processes; no Docker, Node.js, or separate dashboard server is needed.
+
+On macOS, install PostgreSQL and create a database once:
+
+```sh
+brew install postgresql@18
+brew services start postgresql@18
+export PATH="$(brew --prefix postgresql@18)/bin:$PATH"
+createuser --pwprompt mockman
+createdb --owner=mockman mockman
+```
+
+In the copied release directory:
+
+```sh
+cp .env.example .env
+# Edit DATABASE_URL (URL-encode special characters in the password).
+chmod 600 .env
+./run.sh
+```
+
+Open `http://localhost:5174`. The dashboard and admin API share `ADMIN_PORT`
+(default 5174 in the native example); mock routes use `MOCK_PORT` (5175).
+`DASHBOARD_PORT` does not create a listener in the native binary. The backend
+initializes the schema automatically. Configuration is read from the release
+folder, and dashboard API URLs are generated at runtime from `ADMIN_ORIGIN` and
+`MOCK_ORIGIN`; public URL changes require a restart, not a rebuild.
+
+For your existing HTTPS proxy, configure the deployment `.env`:
+
+```dotenv
+DASHBOARD_ORIGIN=https://your-host
+ADMIN_ORIGIN=https://your-host/mockman-api/
+MOCK_ORIGIN=https://your-host/mockman-mock/
+```
+
+Point both `/mockman/` and `/mockman-api/` at `http://127.0.0.1:5174/`, and
+`/mockman-mock/` at `http://127.0.0.1:5175/`. Keep the trailing slashes on
+`proxy_pass` and the `/mockman` to `/mockman/` redirect. No asset substitutions
+are needed. Preserve the public Host header for the admin API's Host validation.
+Keep access to the admin API on a trusted network or VPN; it has no user login.
+
+To supervise it with launchd, create a backend LaunchAgent with `ProgramArguments`
+containing the absolute path of `release/run.sh` and `WorkingDirectory` pointing
+to the release folder. Use `RunAtLoad` and unconditional `KeepAlive`
+so startup is retried if PostgreSQL is not ready yet. No dashboard launchd job
+is needed. User LaunchAgents and `brew services` without sudo start at login.
+
+Existing Docker database contents are not migrated automatically. Back up and
+restore them into native PostgreSQL before switching if you need to retain data.
+For updates, stop the app, replace `mockman` with the newly built binary, preserve
+`.env`, and restart it. Back up PostgreSQL before updates.
+
+Verify startup with `curl --fail http://localhost:5174/`, then open the dashboard
+and use **Try request**. With the proxy enabled, verify through its public URLs;
+the admin API intentionally validates the configured public Host header.
+
 ## Run published images (no source checkout)
 
 Copy `compose.release.yaml` and `.env.release.example` to a deployment folder on

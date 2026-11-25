@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"mockman/internal/admin"
 	"mockman/internal/config"
+	"mockman/internal/dashboard"
 	"mockman/internal/runtime"
 	"mockman/internal/storage"
 	"mockman/migrations"
@@ -20,6 +21,7 @@ import (
 func main() {
 	if err := run(); err != nil {
 		slog.Error("mockman stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -52,7 +54,7 @@ func newServers(cfg config.Config, store *storage.Store) []*http.Server {
 	mock := runtime.CORS(runtime.Handler(store), cfg.MockAllowedOrigins)
 	adminHandler := admin.Server{Store: store, Origin: cfg.AdminOrigin, DashboardOrigin: cfg.DashboardOrigin, Runtime: mock}.Handler()
 	return []*http.Server{
-		{Addr: cfg.AdminAddr, Handler: adminHandler},
+		{Addr: cfg.AdminAddr, Handler: dashboard.Handler(adminHandler, cfg.AdminOrigin, cfg.MockOrigin)},
 		{Addr: cfg.MockAddr, Handler: mock},
 	}
 }
