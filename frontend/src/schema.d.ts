@@ -67,6 +67,7 @@ export interface paths {
                 };
             };
         };
+        /** @description Explicit whole-workspace import/replacement. The dashboard uses targeted entity routes instead. Requires the workspace version. */
         put: {
             parameters: {
                 query?: never;
@@ -115,6 +116,13 @@ export interface paths {
                     content: {
                         "application/json": components["schemas"]["Error"];
                     };
+                };
+                /** @description Bulk import exceeds MAX_IMPORT_MIB */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
                 /** @description Validation failed */
                 422: {
@@ -369,19 +377,1458 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{project}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+            };
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Project document and current project version */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Project"];
+                    };
+                };
+                /** @description Project not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** @description Create or replace this project. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["Project"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete this project. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** @description Update only metadata without resending child entities. Requires metadataVersion in the version field. Request limit 1 MiB. Omitted metadata fields are preserved; null values are rejected. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["ProjectMetadata"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/projects/{project}/features/{feature}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                feature: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Create or replace this feature. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["Feature"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete this feature. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** @description Update only metadata without resending child entities. Requires metadataVersion in the version field. Request limit 1 MiB. Omitted metadata fields are preserved; null values are rejected. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["FeatureMetadata"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/projects/{project}/features/{feature}/endpoints/{endpoint}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                feature: string;
+                endpoint: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Create or replace this endpoint. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["Endpoint"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete this endpoint. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** @description Update only metadata without resending child entities. Requires metadataVersion in the version field. Request limit 1 MiB. Omitted metadata fields are preserved; null values are rejected. */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["EndpointMetadata"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/projects/{project}/features/{feature}/endpoints/{endpoint}/responses/{response}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                feature: string;
+                endpoint: string;
+                response: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Create or replace this response. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                    response: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["Response"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete this response. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                    response: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project}/features/{feature}/endpoints/{endpoint}/scenarios/{scenario}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                feature: string;
+                endpoint: string;
+                scenario: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Create or replace this scenario. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                    scenario: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        value: components["schemas"]["Scenario"];
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        post?: never;
+        /** @description Delete this scenario. version is the entity version for responses/scenarios and the subtree version for containers. Use zero only to create a new entity. */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                    scenario: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Current version of this entity; subtree version for container replacement or deletion. Zero creates a new entity.
+                         */
+                        version: number;
+                        /** @description Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors are not advanced and the result requests a refresh. */
+                        ancestors?: {
+                            [key: string]: number;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{project}/features/{feature}/endpoints/{endpoint}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                feature: string;
+                endpoint: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Atomically apply response/scenario deltas and optional active selections. Requires the endpoint subtree version. Existing unchanged response bodies are not submitted. */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    project: string;
+                    feature: string;
+                    endpoint: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["EndpointChanges"];
+                };
+            };
+            responses: {
+                /** @description Updated project version and saved entity without unrelated configuration */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProjectMutationResult"];
+                    };
+                };
+                /** @description Malformed JSON or invalid identifier */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin origin or mutation header rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Parent or resource not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stale project version or project already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Payload exceeds the configured response or import limit */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid project or dangling scenario reference */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Storage unavailable */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Configured payload limits in bytes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            responseBytes: number;
+                            importBytes: number;
+                            metadataBytes: number;
+                            scenarioBytes?: number;
+                        };
+                    };
+                };
+                /** @description Admin origin rejected */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ProjectMutationResult: {
+            /** Format: int64 */
+            version: number;
+            /**
+             * Format: int64
+             * @description Version for compatibility with the legacy workspace API.
+             */
+            workspaceVersion: number;
+            value?: components["schemas"]["Project"] | components["schemas"]["Feature"] | components["schemas"]["Endpoint"] | components["schemas"]["Response"] | components["schemas"]["Scenario"] | components["schemas"]["ProjectMetadata"] | components["schemas"]["FeatureMetadata"] | components["schemas"]["EndpointMetadata"];
+            versions?: {
+                [key: string]: {
+                    /** Format: int64 */
+                    version?: number;
+                    /** Format: int64 */
+                    metadataVersion?: number;
+                };
+            };
+            /** @description Current runtime revisions for the affected endpoint. These do not advance scenario content edit tokens. */
+            revisions?: {
+                [key: string]: string;
+            };
+            /** @description Concurrent ancestor changes were not included in this mutation. Refresh the workspace before bulk replacement or deletion. */
+            stale?: boolean;
+        };
         Config: {
             version: number;
             projects: components["schemas"]["Project"][];
         };
         Project: {
+            /**
+             * Format: int64
+             * @description Subtree version for full replacement, deletion, and atomic batches.
+             */
+            version?: number;
             id: string;
             name: string;
             environments: string[];
             features: components["schemas"]["Feature"][];
+            /**
+             * Format: int64
+             * @description Optimistic token for metadata-only PATCH requests.
+             */
+            metadataVersion?: number;
         };
         Feature: {
             /** @description Pause mocking without changing individual endpoint settings. */
@@ -389,6 +1836,16 @@ export interface components {
             id: string;
             name: string;
             endpoints: components["schemas"]["Endpoint"][];
+            /**
+             * Format: int64
+             * @description Subtree version for full replacement, deletion, and atomic batches.
+             */
+            version?: number;
+            /**
+             * Format: int64
+             * @description Optimistic token for metadata-only PATCH requests.
+             */
+            metadataVersion?: number;
         };
         Endpoint: {
             id: string;
@@ -402,6 +1859,16 @@ export interface components {
             active: {
                 [key: string]: string;
             };
+            /**
+             * Format: int64
+             * @description Subtree version for full replacement, deletion, and atomic batches.
+             */
+            version?: number;
+            /**
+             * Format: int64
+             * @description Optimistic token for metadata-only PATCH requests.
+             */
+            metadataVersion?: number;
         };
         Response: {
             id: string;
@@ -412,6 +1879,11 @@ export interface components {
             };
             body: unknown;
             delayMs: number;
+            /**
+             * Format: int64
+             * @description Optimistic entity version.
+             */
+            version?: number;
         };
         Condition: {
             /** @enum {string} */
@@ -433,6 +1905,11 @@ export interface components {
             conditions: components["schemas"]["Condition"][];
             flow?: components["schemas"]["FlowGraph"];
             code?: string;
+            /**
+             * Format: int64
+             * @description Optimistic token for scenario content; response-driven runtime revision changes do not advance this token.
+             */
+            version?: number;
         };
         FlowGraph: {
             startNodeId: string;
@@ -516,6 +1993,52 @@ export interface components {
             };
             body: string;
             elapsedMs: number;
+        };
+        ProjectMetadata: {
+            id: string;
+            name?: string;
+            environments?: string[];
+        };
+        FeatureMetadata: {
+            /** @description Pause mocking without changing individual endpoint settings. */
+            mockingDisabled?: boolean;
+            id: string;
+            name?: string;
+        };
+        EndpointMetadata: {
+            id: string;
+            name?: string;
+            /** @enum {string} */
+            method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
+            path?: string;
+            enabled?: boolean;
+            active?: {
+                [key: string]: string;
+            };
+        };
+        EndpointChanges: {
+            /** Format: int64 */
+            version: number;
+            active?: {
+                [key: string]: string;
+            };
+            changes: {
+                /** @enum {string} */
+                kind: "response" | "scenario";
+                id: string;
+                /** Format: int64 */
+                version: number;
+                value?: components["schemas"]["Response"] | components["schemas"]["Scenario"];
+                delete?: boolean;
+            }[];
+            ancestors?: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description Required when active selections are supplied, to guard against stale endpoint metadata.
+             */
+            metadataVersion?: number;
         };
     };
     responses: never;

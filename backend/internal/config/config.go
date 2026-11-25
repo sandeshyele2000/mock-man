@@ -14,6 +14,8 @@ import (
 )
 
 type Config struct {
+	MaxResponseMiB     int      `env:"MAX_RESPONSE_MIB" envDefault:"10"`
+	MaxImportMiB       int      `env:"MAX_IMPORT_MIB" envDefault:"100"`
 	PublicHost         string   `env:"PUBLIC_HOST" envDefault:"localhost"`
 	BindAddress        string   `env:"BIND_ADDRESS" envDefault:"127.0.0.1"`
 	AdminPort          int      `env:"ADMIN_PORT" envDefault:"8080"`
@@ -41,6 +43,9 @@ func Load() (Config, error) {
 		if port < 1 || port > 65535 {
 			return Config{}, fmt.Errorf("port must be between 1 and 65535: %d", port)
 		}
+	}
+	if cfg.MaxResponseMiB < 1 || cfg.MaxResponseMiB > 100 || cfg.MaxImportMiB < cfg.MaxResponseMiB+1 || cfg.MaxImportMiB > 512 {
+		return Config{}, errors.New("MAX_RESPONSE_MIB must be 1–100 and MAX_IMPORT_MIB must be greater than MAX_RESPONSE_MIB and at most 512")
 	}
 	adminAddr := cfg.AdminAddr
 	if cfg.AdminAddr == "" {

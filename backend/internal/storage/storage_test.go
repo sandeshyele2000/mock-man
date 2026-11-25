@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-func testStore(t *testing.T) *storage.Store {
+func testStore(t *testing.T, seedData ...bool) *storage.Store {
 	t.Helper()
 	databaseURL := os.Getenv("TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -42,6 +42,12 @@ func testStore(t *testing.T) *storage.Store {
 	}
 	if err = store.Init(ctx, migrations.Schema); err != nil {
 		t.Fatal(err)
+	}
+	if len(seedData) == 0 || seedData[0] {
+		seed := storage.Sample()
+		if _, err = store.Save(ctx, seed); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Cleanup(func() {
 		_ = store.Close()
@@ -277,7 +283,7 @@ func TestLegacyGlobalPauseDoesNotDisableMocking(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 	// Existing documents may still contain the retired workspace-wide flag.
-	if err := store.DB.WithContext(ctx).Exec(`UPDATE configuration SET document = (document::jsonb || '{"mockingDisabled":true}'::jsonb)::json`).Error; err != nil {
+	if err := store.DB.WithContext(ctx).Exec(`UPDATE projects SET document = document || '{"mockingDisabled":true}'::jsonb`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Match(ctx, "demo", "development", "legacy-global", req()); err != nil {

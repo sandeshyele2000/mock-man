@@ -77,6 +77,7 @@ test("feature imports reject duplicate IDs, dangling references and oversized fi
     readFeatureImport(
       new File([" ".repeat(2 * 1024 * 1024 + 1)], "large.json"),
       ["development"],
+      2 * 1024 * 1024,
     ),
   ).rejects.toThrow("at most 2 MiB");
 });

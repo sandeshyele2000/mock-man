@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { serverConfig } from "../../scripts/config.mjs";
+import { seedWorkspace } from "./backendFixture";
+test.beforeEach(async ({ request }) => {
+  await seedWorkspace(request);
+});
 
 test("pause mocking, import features with picker and drop, and persist dark mode", async ({
   page,

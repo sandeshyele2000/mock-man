@@ -37,9 +37,20 @@ import {
   readFeatureImport,
   readScenarioImport,
 } from "./workspaceTransfers";
+import {
+  planWorkspaceChange,
+  mergeMetadataDraft,
+  applyWorkspaceChange,
+  type WorkspaceChangeResult,
+} from "./workspaceChanges";
 export default function App() {
   const client = useQueryClient();
   const config = useQuery({ queryKey: ["config"], queryFn: loadConfig });
+  const limits = useQuery({
+    queryKey: ["limits"],
+    queryFn: () => api<{ importBytes: number }>("/api/limits"),
+    staleTime: Infinity,
+  });
   const [projectID, setProjectID] = useState("demo");
   const [featureID, setFeatureID] = useState("");
   const [expandedFeatureID, setExpandedFeatureID] = useState("");
@@ -83,14 +94,55 @@ export default function App() {
     enabled: !!selectedProject,
   });
   const save = useMutation({
-    mutationFn: (next: Config) => api<Config>("/api/config", "PUT", next),
+    mutationFn: async (next: Config) => {
+      if (!workspaceConfig) throw new Error("Workspace has not loaded.");
+      const plan = planWorkspaceChange(workspaceConfig, next);
+      if (!plan) return null;
+      const saved = await api<WorkspaceChangeResult>(
+        plan.path,
+        plan.method,
+        plan.body,
+      );
+      return {
+        id: plan.projectID,
+        project: applyWorkspaceChange(plan, saved),
+        version: saved.workspaceVersion,
+        stale: saved.stale,
+      };
+    },
     onSuccess: (data) => {
-      client.setQueryData(["config"], data);
+      if (data)
+        client.setQueryData<Config>(["config"], (current) => {
+          if (!current) return current;
+          const projects = current.projects.filter(
+            (project) => project.id !== data.id,
+          );
+          if (data.project) {
+            const index = current.projects.findIndex(
+              (project) => project.id === data.id,
+            );
+            projects.splice(
+              index < 0 ? projects.length : index,
+              0,
+              data.project,
+            );
+          }
+          return {
+            ...current,
+            version: Math.max(current.version, data.version),
+            projects,
+          };
+        });
+      if (data?.stale) void client.invalidateQueries({ queryKey: ["config"] });
       setModal(null);
       setError("");
       setNotice("Workspace saved");
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      setError(err.message);
+      // Keep the editor open, but refresh version tokens after a concurrent edit.
+      void client.invalidateQueries({ queryKey: ["config"] });
+    },
   });
   useEffect(() => {
     if (notice) {
@@ -106,9 +158,14 @@ export default function App() {
       endpoint: Endpoint | undefined,
     ) => void,
   ) {
-    if (!workspaceConfig || !selectedProject) return;
-    const next = structuredClone(workspaceConfig);
-    const np = next.projects.find((v) => v.id === selectedProject.id)!;
+    if (!workspaceConfig || !selectedProject || save.isPending) return;
+    const np = structuredClone(selectedProject);
+    const next = {
+      ...workspaceConfig,
+      projects: workspaceConfig.projects.map((project) =>
+        project.id === np.id ? np : project,
+      ),
+    };
     const nf = np.features.find((v) => v.id === selectedFeature?.id);
     const ne = nf?.endpoints.find((v) => v.id === selectedEndpoint?.id);
     update(next, np, nf, ne);
@@ -187,32 +244,76 @@ export default function App() {
   }
 
   function saveEntity(value: Project | Feature | Endpoint) {
-    if (modal?.kind === "project") {
-      if (!workspaceConfig) return;
-      const next = structuredClone(workspaceConfig);
-      const idx = next.projects.findIndex((v) => v.id === value.id);
-      if (idx < 0) next.projects.push(value as Project);
-      else next.projects[idx] = value as Project;
-      save.mutate(next);
-      setProjectID(value.id);
-    } else if (modal?.kind === "feature")
-      change((_, p) => {
-        const idx = p.features.findIndex((v) => v.id === value.id);
-        if (idx < 0) p.features.push(value as Feature);
-        else p.features[idx] = value as Feature;
-        setFeatureID(value.id);
-        setExpandedFeatureID(value.id);
-      });
-    else
-      change((_, __, f) => {
-        if (!f) return;
-        const idx = f.endpoints.findIndex((v) => v.id === value.id);
-        if (idx < 0) f.endpoints.push(value as Endpoint);
-        else f.endpoints[idx] = value as Endpoint;
-        setEndpointID(value.id);
-      });
+    if (save.isPending || !workspaceConfig) return;
+    try {
+      if (modal?.kind === "project") {
+        const next = {
+          ...workspaceConfig,
+          projects: [...workspaceConfig.projects],
+        };
+        const index = next.projects.findIndex(
+          (project) => project.id === value.id,
+        );
+        const prepared = mergeMetadataDraft(
+          next.projects[index],
+          value as Project,
+          modal.value,
+        );
+        if (index < 0) next.projects.push(prepared);
+        else next.projects[index] = prepared;
+        save.mutate(next);
+        setProjectID(value.id);
+      } else if (modal?.kind === "feature") {
+        const prepared = mergeMetadataDraft(
+          selectedProject?.features.find((feature) => feature.id === value.id),
+          value as Feature,
+          modal.value,
+        );
+        change((_, project) => {
+          const index = project.features.findIndex(
+            (feature) => feature.id === value.id,
+          );
+          if (index < 0) project.features.push(prepared);
+          else project.features[index] = prepared;
+          setFeatureID(value.id);
+          setExpandedFeatureID(value.id);
+        });
+      } else if (modal?.kind === "endpoint") {
+        const prepared = mergeMetadataDraft(
+          selectedFeature?.endpoints.find(
+            (endpoint) => endpoint.id === value.id,
+          ),
+          value as Endpoint,
+          modal.value,
+        );
+        change((_, __, feature) => {
+          if (!feature) return;
+          const index = feature.endpoints.findIndex(
+            (endpoint) => endpoint.id === value.id,
+          );
+          if (index < 0) feature.endpoints.push(prepared);
+          else feature.endpoints[index] = prepared;
+          setEndpointID(value.id);
+        });
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "Could not save this item.",
+      );
+    }
   }
   function saveResponse(v: Response) {
+    if (
+      modal?.kind === "response" &&
+      modal.value &&
+      selectedEndpoint?.responses.find((response) => response.id === v.id)
+        ?.version !== modal.value.version
+    ) {
+      setError(
+        "This response changed while the editor was open. Close and reopen the editor before saving.",
+      );
+      return;
+    }
     change((_, __, ___, e) => {
       if (!e) return;
       const i = e.responses.findIndex((r) => r.id === v.id);
@@ -221,6 +322,17 @@ export default function App() {
     });
   }
   function saveScenario(v: Scenario, importedResponses: Response[] = []) {
+    if (
+      modal?.kind === "scenario" &&
+      modal.value &&
+      selectedEndpoint?.scenarios.find((scenario) => scenario.id === v.id)
+        ?.version !== modal.value.version
+    ) {
+      setError(
+        "This scenario changed while the editor was open. Close and reopen the editor before saving.",
+      );
+      return;
+    }
     change((_, __, ___, e) => {
       if (!e) return;
       const importedIDs = new Set(
@@ -243,6 +355,7 @@ export default function App() {
       const importedFeature = await readFeatureImport(
         file,
         selectedProject.environments,
+        limits.data?.importBytes,
       );
       change((_, project) => {
         project.features.push(importedFeature);
@@ -264,7 +377,7 @@ export default function App() {
     if (!file || !selectedEndpoint) return;
     try {
       const { scenario: importedScenario, responses: importedResponses } =
-        await readScenarioImport(file);
+        await readScenarioImport(file, limits.data?.importBytes);
       change((_, __, ___, endpoint) => {
         if (!endpoint) return;
         endpoint.responses.push(...importedResponses);

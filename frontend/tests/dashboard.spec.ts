@@ -1,6 +1,10 @@
 // Created by Sandesh
 import { test, expect } from "@playwright/test";
 import { serverConfig } from "../../scripts/config.mjs";
+import { seedWorkspace } from "./backendFixture";
+test.beforeEach(async ({ request }) => {
+  await seedWorkspace(request);
+});
 test("create, edit, activate, try, inspect logs and reset a mock endpoint", async ({
   page,
   request,
@@ -11,6 +15,14 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
     "X-Mockman-Admin": "1",
     "Content-Type": "application/json",
   };
+  const mutations: { path: string; body: Record<string, unknown> }[] = [];
+  page.on("request", (request) => {
+    if (["PUT", "DELETE"].includes(request.method()))
+      mutations.push({
+        path: new URL(request.url()).pathname,
+        body: request.postDataJSON(),
+      });
+  });
   const unique = `e2e-${Date.now()}`;
   try {
     await page.goto("/");
@@ -25,7 +37,8 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Name", { exact: true }).fill("Test acceptance");
     await dialog.getByLabel("Identifier", { exact: true }).fill(unique);
-    await dialog.getByLabel("Method", { exact: true }).selectOption("POST");
+    await dialog.getByLabel("Method", { exact: true }).click();
+    await page.getByRole("option", { name: "POST", exact: true }).click();
     await dialog.getByLabel("API path").fill("/e2e/accept");
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).not.toBeVisible();
@@ -46,23 +59,27 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
     await page.getByRole("tab", { name: /Scenarios/ }).click();
     await page.getByRole("button", { name: "Add scenario" }).click();
     await dialog.getByLabel("Scenario name").fill("Retry once");
-    await dialog
-      .getByLabel("Behavior", { exact: true })
-      .selectOption("failFirst");
+    await dialog.getByLabel("Behavior", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Fail first N attempts", exact: true })
+      .click();
     await dialog.getByLabel("Attempt threshold").fill("1");
-    await dialog
-      .getByLabel("Failure response")
-      .selectOption({ label: "Failure · 503" });
-    await dialog
-      .getByLabel("Success response")
-      .selectOption({ label: "Success · 200" });
+    await dialog.getByLabel("Failure response", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Failure · 503", exact: true })
+      .click();
+    await dialog.getByLabel("Success response", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Success · 200", exact: true })
+      .click();
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).not.toBeVisible();
     await page.getByRole("button", { name: "Add scenario" }).click();
     await dialog.getByLabel("Scenario name").fill("Always success");
-    await dialog
-      .getByLabel("Response", { exact: true })
-      .selectOption({ label: "Success · 200" });
+    await dialog.getByLabel("Response", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Success · 200", exact: true })
+      .click();
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).not.toBeVisible();
     await page
@@ -84,7 +101,6 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
     await dialog.getByLabel("Scenario name").fill("Retry first attempt");
     await dialog.getByRole("button", { name: "Save changes" }).click();
     await expect(dialog).not.toBeVisible();
-    await page.getByLabel("Session ID").fill(unique);
     await page.getByRole("button", { name: "Try request" }).click();
     await dialog.getByRole("button", { name: "Send request" }).click();
     await expect(dialog.getByText("HTTP 503")).toBeVisible();
@@ -101,11 +117,16 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
         .filter({ has: page.getByText("Attempt 2", { exact: true }) })
         .getByText("active scenario; conditions matched", { exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Reset attempts" }).click();
-    await dialog
-      .getByRole("button", { name: `This endpoint · session ${unique}` })
-      .click();
-    await expect(dialog).not.toBeVisible();
+    const reset = await request.post(`${backendURL}/api/reset`, {
+      headers,
+      data: {
+        project: "demo",
+        environment: "development",
+        endpoint: unique,
+        session: "default",
+      },
+    });
+    expect(reset.ok()).toBe(true);
     await page.getByRole("button", { name: "Try request" }).click();
     await dialog.getByRole("button", { name: "Send request" }).click();
     await expect(dialog.getByText("HTTP 503")).toBeVisible();
@@ -113,9 +134,10 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
     await page.getByRole("tab", { name: /Scenarios/ }).click();
     await page.getByRole("button", { name: "Add scenario" }).click();
     await dialog.getByLabel("Scenario name").fill("Conditional success");
-    await dialog
-      .getByLabel("Response", { exact: true })
-      .selectOption({ label: "Success · 200" });
+    await dialog.getByLabel("Response", { exact: true }).click();
+    await page
+      .getByRole("option", { name: "Success · 200", exact: true })
+      .click();
     await dialog.getByRole("button", { name: "Add condition" }).click();
     await dialog.getByLabel("Condition 1 key").fill("mode");
     await dialog.getByLabel("Condition 1 value").fill("fast");
@@ -129,15 +151,19 @@ test("create, edit, activate, try, inspect logs and reset a mock endpoint", asyn
     await dialog.getByRole("button", { name: "Send request" }).click();
     await expect(dialog.getByText("HTTP 200")).toBeVisible();
     await dialog.getByRole("button", { name: "Close dialog" }).click();
-    await page.getByLabel("Session ID").fill("");
-    await expect(
-      page.getByRole("button", { name: "Reset attempts" }),
-    ).toBeDisabled();
-    await page.getByLabel("Session ID").fill(unique);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
       page.getByRole("button", { name: "Try request" }),
     ).toBeVisible();
+    expect(mutations.some(({ path }) => path.includes("/responses/"))).toBe(
+      true,
+    );
+    expect(
+      mutations.every(
+        ({ path, body }) =>
+          path.startsWith("/api/projects/") && !("projects" in body),
+      ),
+    ).toBe(true);
     await page.screenshot({
       path: "test-results/dashboard-mobile.png",
       fullPage: true,

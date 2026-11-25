@@ -44,9 +44,12 @@ export function exportFeature(feature: Feature) {
 export async function readFeatureImport(
   file: File,
   environments: string[],
+  maxBytes = 100 * 1024 * 1024,
 ): Promise<Feature> {
-  if (file.size > 2 * 1024 * 1024)
-    throw new Error("Feature file must be at most 2 MiB.");
+  if (file.size > maxBytes)
+    throw new Error(
+      `Feature file must be at most ${maxBytes / 1024 / 1024} MiB.`,
+    );
   const bundle = JSON.parse(await file.text());
   const feature = bundle?.feature as Feature | undefined;
   if (
@@ -209,7 +212,12 @@ export async function readFeatureImport(
 }
 export async function readScenarioImport(
   file: File,
+  maxBytes = 100 * 1024 * 1024,
 ): Promise<{ scenario: Scenario; responses: Response[] }> {
+  if (file.size > maxBytes)
+    throw new Error(
+      `Scenario file must be at most ${maxBytes / 1024 / 1024} MiB.`,
+    );
   const bundle = JSON.parse(await file.text());
   const scenario = bundle?.scenario as Scenario | undefined;
   const responses = bundle?.responses as Response[] | undefined;

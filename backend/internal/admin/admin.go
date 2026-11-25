@@ -16,10 +16,12 @@ import (
 )
 
 type Server struct {
-	Store           *storage.Store
-	Origin          string
-	DashboardOrigin string
-	Runtime         http.Handler
+	MaxResponseBytes int64
+	MaxImportBytes   int64
+	Store            *storage.Store
+	Origin           string
+	DashboardOrigin  string
+	Runtime          http.Handler
 }
 
 type resetRequest struct {
@@ -56,6 +58,7 @@ func (s Server) Handler() http.Handler {
 		writeErrorMessage(w, http.StatusNotFound, "unknown admin endpoint")
 	})
 	s.registerRoutes(router)
+	s.registerProjectRoutes(router)
 	router.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeErrorMessage(w, http.StatusMethodNotAllowed, "method not allowed")
 	})
@@ -81,8 +84,8 @@ func (s Server) getConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s Server) putConfig(w http.ResponseWriter, r *http.Request) {
 	var config engine.Config
-	if err := decodeJSON(w, r, &config); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if err := decodeJSONLimit(w, r, &config, s.importLimit()); err != nil {
+		writeDecodeError(w, err)
 		return
 	}
 	if err := engine.Validate(config); err != nil {
@@ -196,7 +199,7 @@ func (s Server) withSecurity(next http.Handler) http.Handler {
 				writeError(w, http.StatusForbidden, err)
 				return
 			}
-			w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Mockman-Admin")
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -240,13 +243,20 @@ func (s Server) authorizeOrigin(r *http.Request) error {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
+	return decodeJSONLimit(w, r, target, 2<<20)
+}
+func decodeJSONLimit(w http.ResponseWriter, r *http.Request, target any, limit int64) error {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
+		var sizeError *http.MaxBytesError
+		if errors.As(err, &sizeError) {
+			return err
+		}
 		return errors.New("expected one JSON value")
 	}
 	return nil
@@ -266,4 +276,13 @@ func writeErrorMessage(w http.ResponseWriter, status int, message string) {
 func (s Server) storageFailure(w http.ResponseWriter, err error) {
 	slog.Error("admin storage error", "error", err)
 	writeErrorMessage(w, http.StatusInternalServerError, "database operation failed")
+}
+
+func writeDecodeError(w http.ResponseWriter, err error) {
+	var limit *http.MaxBytesError
+	if errors.As(err, &limit) {
+		writeError(w, http.StatusRequestEntityTooLarge, err)
+		return
+	}
+	writeError(w, http.StatusBadRequest, err)
 }

@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
   title: Mockman admin API
-  version: 0.1.0
+  version: 2.0.0
   description: >-
     Same-origin local admin API. Mutations require Content-Type: application/json and
-    X-Mockman-Admin: 1. Mock listener preserves application paths. X-Mock-Feature selects a feature; omitting it
-    returns HTTP 409 if multiple enabled features contain the same method and path.
-    See README for runtime headers.
+    X-Mockman-Admin: 1. Mock listener preserves application paths. X-Mock-Feature selects a feature;
+    omitting it returns HTTP 409 if multiple enabled features contain the same method and path. See
+    README for runtime headers.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -69,6 +69,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '413':
+          description: Bulk import exceeds MAX_IMPORT_MIB
         '422':
           description: Validation failed
           content:
@@ -87,6 +89,9 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/Config'
+      description: >-
+        Explicit whole-workspace import/replacement. The dashboard uses targeted entity routes
+        instead. Requires the workspace version.
   /api/logs:
     get:
       responses:
@@ -217,8 +222,881 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/TryRequest'
+  /api/projects/{project}:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      responses:
+        '200':
+          description: Project document and current project version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          description: Project not found
+    put:
+      description: >-
+        Create or replace this project. version is the entity version for responses/scenarios and
+        the subtree version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/Project'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    delete:
+      description: >-
+        Delete this project. version is the entity version for responses/scenarios and the subtree
+        version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    patch:
+      description: >-
+        Update only metadata without resending child entities. Requires metadataVersion in the
+        version field. Request limit 1 MiB. Omitted metadata fields are preserved; null values are
+        rejected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/ProjectMetadata'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+  /api/projects/{project}/features/{feature}:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: feature
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      description: >-
+        Create or replace this feature. version is the entity version for responses/scenarios and
+        the subtree version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/Feature'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    delete:
+      description: >-
+        Delete this feature. version is the entity version for responses/scenarios and the subtree
+        version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    patch:
+      description: >-
+        Update only metadata without resending child entities. Requires metadataVersion in the
+        version field. Request limit 1 MiB. Omitted metadata fields are preserved; null values are
+        rejected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/FeatureMetadata'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+  /api/projects/{project}/features/{feature}/endpoints/{endpoint}:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: feature
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: endpoint
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      description: >-
+        Create or replace this endpoint. version is the entity version for responses/scenarios and
+        the subtree version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/Endpoint'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    delete:
+      description: >-
+        Delete this endpoint. version is the entity version for responses/scenarios and the subtree
+        version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    patch:
+      description: >-
+        Update only metadata without resending child entities. Requires metadataVersion in the
+        version field. Request limit 1 MiB. Omitted metadata fields are preserved; null values are
+        rejected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/EndpointMetadata'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+  /api/projects/{project}/features/{feature}/endpoints/{endpoint}/responses/{response}:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: feature
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: endpoint
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: response
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      description: >-
+        Create or replace this response. version is the entity version for responses/scenarios and
+        the subtree version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/Response'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    delete:
+      description: >-
+        Delete this response. version is the entity version for responses/scenarios and the subtree
+        version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+  /api/projects/{project}/features/{feature}/endpoints/{endpoint}/scenarios/{scenario}:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: feature
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: endpoint
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: scenario
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      description: >-
+        Create or replace this scenario. version is the entity version for responses/scenarios and
+        the subtree version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+                - value
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                value:
+                  $ref: '#/components/schemas/Scenario'
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+    delete:
+      description: >-
+        Delete this scenario. version is the entity version for responses/scenarios and the subtree
+        version for containers. Use zero only to create a new entity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  format: int64
+                  description: >-
+                    Current version of this entity; subtree version for container replacement or
+                    deletion. Zero creates a new entity.
+                ancestors:
+                  type: object
+                  additionalProperties:
+                    type: integer
+                    format: int64
+                  description: >-
+                    Known project, feature/<id>, endpoint/<id> subtree versions. Unknown ancestors
+                    are not advanced and the result requests a refresh.
+              additionalProperties: false
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+  /api/projects/{project}/features/{feature}/endpoints/{endpoint}/changes:
+    parameters:
+      - name: project
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: feature
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: endpoint
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      description: >-
+        Atomically apply response/scenario deltas and optional active selections. Requires the
+        endpoint subtree version. Existing unchanged response bodies are not submitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointChanges'
+      responses:
+        '200':
+          description: Updated project version and saved entity without unrelated configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectMutationResult'
+        '400':
+          description: Malformed JSON or invalid identifier
+        '403':
+          description: Admin origin or mutation header rejected
+        '404':
+          description: Parent or resource not found
+        '409':
+          description: Stale project version or project already exists
+        '413':
+          description: Payload exceeds the configured response or import limit
+        '422':
+          description: Invalid project or dangling scenario reference
+        '500':
+          description: Storage unavailable
+  /api/limits:
+    get:
+      responses:
+        '200':
+          description: Configured payload limits in bytes
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - responseBytes
+                  - importBytes
+                  - metadataBytes
+                properties:
+                  responseBytes:
+                    type: integer
+                  importBytes:
+                    type: integer
+                  metadataBytes:
+                    type: integer
+                  scenarioBytes:
+                    type: integer
+        '403':
+          description: Admin origin rejected
 components:
   schemas:
+    ProjectMutationResult:
+      type: object
+      required:
+        - version
+        - workspaceVersion
+      properties:
+        version:
+          type: integer
+          format: int64
+        workspaceVersion:
+          type: integer
+          format: int64
+          description: Version for compatibility with the legacy workspace API.
+        value:
+          anyOf:
+            - $ref: '#/components/schemas/Project'
+            - $ref: '#/components/schemas/Feature'
+            - $ref: '#/components/schemas/Endpoint'
+            - $ref: '#/components/schemas/Response'
+            - $ref: '#/components/schemas/Scenario'
+            - $ref: '#/components/schemas/ProjectMetadata'
+            - $ref: '#/components/schemas/FeatureMetadata'
+            - $ref: '#/components/schemas/EndpointMetadata'
+        versions:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              version:
+                type: integer
+                format: int64
+              metadataVersion:
+                type: integer
+                format: int64
+        revisions:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Current runtime revisions for the affected endpoint. These do not advance scenario
+            content edit tokens.
+        stale:
+          type: boolean
+          description: >-
+            Concurrent ancestor changes were not included in this mutation. Refresh the workspace
+            before bulk replacement or deletion.
+      additionalProperties: false
     Config:
       type: object
       required:
@@ -240,6 +1118,10 @@ components:
         - environments
         - features
       properties:
+        version:
+          type: integer
+          format: int64
+          description: Subtree version for full replacement, deletion, and atomic batches.
         id:
           type: string
         name:
@@ -252,6 +1134,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Feature'
+        metadataVersion:
+          type: integer
+          format: int64
+          description: Optimistic token for metadata-only PATCH requests.
       additionalProperties: false
     Feature:
       type: object
@@ -271,6 +1157,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Endpoint'
+        version:
+          type: integer
+          format: int64
+          description: Subtree version for full replacement, deletion, and atomic batches.
+        metadataVersion:
+          type: integer
+          format: int64
+          description: Optimistic token for metadata-only PATCH requests.
       additionalProperties: false
     Endpoint:
       type: object
@@ -314,6 +1208,14 @@ components:
           type: object
           additionalProperties:
             type: string
+        version:
+          type: integer
+          format: int64
+          description: Subtree version for full replacement, deletion, and atomic batches.
+        metadataVersion:
+          type: integer
+          format: int64
+          description: Optimistic token for metadata-only PATCH requests.
       additionalProperties: false
     Response:
       type: object
@@ -338,6 +1240,10 @@ components:
         body: {}
         delayMs:
           type: integer
+        version:
+          type: integer
+          format: int64
+          description: Optimistic entity version.
       additionalProperties: false
     Condition:
       type: object
@@ -406,6 +1312,12 @@ components:
           $ref: '#/components/schemas/FlowGraph'
         code:
           type: string
+        version:
+          type: integer
+          format: int64
+          description: >-
+            Optimistic token for scenario content; response-driven runtime revision changes do not
+            advance this token.
       additionalProperties: false
     FlowGraph:
       type: object
@@ -431,7 +1343,7 @@ components:
         - id
         - type
         - x
-        - y
+        - 'y'
       properties:
         id:
           type: string
@@ -444,7 +1356,7 @@ components:
             - end
         x:
           type: integer
-        y:
+        'y':
           type: integer
         responseId:
           type: string
@@ -481,14 +1393,21 @@ components:
       additionalProperties: false
     RequestPayload:
       type: object
-      required: [body, encoding, contentType, sizeBytes, truncated]
+      required:
+        - body
+        - encoding
+        - contentType
+        - sizeBytes
+        - truncated
       properties:
         body:
           type: string
           description: Original body text, or base64 for binary payloads. Capture is limited to 64 KiB.
         encoding:
           type: string
-          enum: [utf-8, base64]
+          enum:
+            - utf-8
+            - base64
         contentType:
           type: string
         sizeBytes:
@@ -623,4 +1542,109 @@ components:
           type: string
         elapsedMs:
           type: integer
+      additionalProperties: false
+    ProjectMetadata:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        environments:
+          type: array
+          items:
+            type: string
+      additionalProperties: false
+    FeatureMetadata:
+      type: object
+      required:
+        - id
+      properties:
+        mockingDisabled:
+          type: boolean
+          description: Pause mocking without changing individual endpoint settings.
+        id:
+          type: string
+        name:
+          type: string
+      additionalProperties: false
+    EndpointMetadata:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        method:
+          type: string
+          enum:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - HEAD
+            - OPTIONS
+        path:
+          type: string
+        enabled:
+          type: boolean
+        active:
+          type: object
+          additionalProperties:
+            type: string
+      additionalProperties: false
+    EndpointChanges:
+      type: object
+      required:
+        - version
+        - changes
+      properties:
+        version:
+          type: integer
+          format: int64
+        active:
+          type: object
+          additionalProperties:
+            type: string
+        changes:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required:
+              - kind
+              - id
+              - version
+            properties:
+              kind:
+                type: string
+                enum:
+                  - response
+                  - scenario
+              id:
+                type: string
+              version:
+                type: integer
+                format: int64
+              value:
+                oneOf:
+                  - $ref: '#/components/schemas/Response'
+                  - $ref: '#/components/schemas/Scenario'
+              delete:
+                type: boolean
+            additionalProperties: false
+        ancestors:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        metadataVersion:
+          type: integer
+          format: int64
+          description: Required when active selections are supplied, to guard against stale endpoint metadata.
       additionalProperties: false

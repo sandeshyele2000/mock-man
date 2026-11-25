@@ -18,7 +18,7 @@ services:
       retries: 20
   app:
     restart: unless-stopped
-    image: ghcr.io/sandeshyele2000/mockman-backend:${MOCKMAN_VERSION:-1.0.0}
+    image: ghcr.io/sandeshyele2000/mockman-backend:${MOCKMAN_VERSION:-2.0.0}
     environment:
       DATABASE_URL: postgres://mockman:mockman@db:5432/mockman?sslmode=disable
       ADMIN_ADDR: 0.0.0.0:8080
@@ -26,6 +26,8 @@ services:
       DASHBOARD_ORIGIN: ${DASHBOARD_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${DASHBOARD_PORT:-5173}}
       MOCK_ADDR: 0.0.0.0:9091
       MOCK_ALLOWED_ORIGINS: ${MOCK_ALLOWED_ORIGINS:-}
+      MAX_RESPONSE_MIB: ${MAX_RESPONSE_MIB:-10}
+      MAX_IMPORT_MIB: ${MAX_IMPORT_MIB:-100}
     ports:
       - '${BIND_ADDRESS:-127.0.0.1}:${ADMIN_PORT:-8080}:8080'
       - '${BIND_ADDRESS:-127.0.0.1}:${MOCK_PORT:-9091}:9091'
@@ -34,7 +36,7 @@ services:
         condition: service_healthy
   dashboard:
     restart: unless-stopped
-    image: ghcr.io/sandeshyele2000/mockman-dashboard:${MOCKMAN_VERSION:-1.0.0}
+    image: ghcr.io/sandeshyele2000/mockman-dashboard:${MOCKMAN_VERSION:-2.0.0}
     environment:
       ADMIN_ORIGIN: ${ADMIN_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${ADMIN_PORT:-8080}}
       MOCK_ORIGIN: ${MOCK_ORIGIN:-http://${PUBLIC_HOST:-localhost}:${MOCK_PORT:-9091}}

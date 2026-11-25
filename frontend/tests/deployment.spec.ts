@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { fixture } from "./fixture";
+import { fixture, fulfillProjectMutation } from "./fixture";
 
 test.skip(!process.env.DEPLOYMENT_URL, "Requires a built dashboard deployment");
 
@@ -84,6 +84,7 @@ test("deployment preserves mount paths for assets, API calls and editor workers"
   });
   page.on("worker", (worker) => workers.push(worker.url()));
   await page.route("**/api/**", async (route) => {
+    if (await fulfillProjectMutation(route, config)) return;
     const path = new URL(route.request().url()).pathname;
     expect(path.startsWith(`${apiPath}api/`)).toBe(true);
     const isConfig = path === `${apiPath}api/config`;

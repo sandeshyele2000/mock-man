@@ -20,6 +20,7 @@ import (
 func main() {
 	if err := run(); err != nil {
 		slog.Error("mockman stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -45,14 +46,18 @@ func run() error {
 func openStore(ctx context.Context, cfg config.Config) (*storage.Store, error) {
 	startup, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	return storage.Open(startup, cfg.DatabaseURL)
+	store, err := storage.Open(startup, cfg.DatabaseURL)
+	if err == nil {
+		store.MaxResponseBytes = int64(cfg.MaxResponseMiB) << 20
+	}
+	return store, err
 }
 
 func newServers(cfg config.Config, store *storage.Store) []*http.Server {
 	mock := runtime.CORS(runtime.Handler(store), cfg.MockAllowedOrigins)
-	adminHandler := admin.Server{Store: store, Origin: cfg.AdminOrigin, DashboardOrigin: cfg.DashboardOrigin, Runtime: mock}.Handler()
+	adminHandler := admin.Server{Store: store, Origin: cfg.AdminOrigin, DashboardOrigin: cfg.DashboardOrigin, Runtime: mock, MaxResponseBytes: int64(cfg.MaxResponseMiB) << 20, MaxImportBytes: int64(cfg.MaxImportMiB) << 20}.Handler()
 	return []*http.Server{
-		{Addr: cfg.AdminAddr, Handler: adminHandler},
+		{Addr: cfg.AdminAddr, Handler: adminHandler, ReadTimeout: 2 * time.Minute, WriteTimeout: 3 * time.Minute},
 		{Addr: cfg.MockAddr, Handler: mock},
 	}
 }
@@ -84,8 +89,12 @@ func serve(ctx context.Context, servers []*http.Server, store *storage.Store) er
 
 func configureServer(server *http.Server) {
 	server.ReadHeaderTimeout = 5 * time.Second
-	server.ReadTimeout = 10 * time.Second
-	server.WriteTimeout = 40 * time.Second
+	if server.ReadTimeout == 0 {
+		server.ReadTimeout = 10 * time.Second
+	}
+	if server.WriteTimeout == 0 {
+		server.WriteTimeout = 40 * time.Second
+	}
 	server.IdleTimeout = 60 * time.Second
 	server.MaxHeaderBytes = 32 << 10
 }

@@ -59,3 +59,20 @@ func TestDotEnvAndInvalidPort(t *testing.T) {
 		t.Fatalf("process environment should win: %+v, %v", cfg, err)
 	}
 }
+
+func TestPayloadLimits(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, tt := range []struct {
+		response, importSize string
+		valid                bool
+	}{
+		{"10", "100", true}, {"100", "101", true}, {"0", "100", false}, {"101", "200", false}, {"10", "10", false}, {"10", "513", false},
+	} {
+		t.Setenv("MAX_RESPONSE_MIB", tt.response)
+		t.Setenv("MAX_IMPORT_MIB", tt.importSize)
+		_, err := Load()
+		if (err == nil) != tt.valid {
+			t.Fatalf("response=%s import=%s: %v", tt.response, tt.importSize, err)
+		}
+	}
+}

@@ -6,14 +6,27 @@ import (
 	"time"
 )
 
-// Models map to the existing migration-defined schema; no automatic schema changes occur.
+// Metadata and payloads have separate rows. Documents never contain child arrays.
 type configuration struct {
-	ID       bool `gorm:"primaryKey;autoIncrement:false"`
-	Version  int64
-	Document json.RawMessage `gorm:"type:json"`
+	ID            bool `gorm:"primaryKey;autoIncrement:false"`
+	Version       int64
+	SchemaVersion int
 }
 
-func (configuration) TableName() string { return "configuration" }
+func (configuration) TableName() string { return "workspace_state" }
+
+type entityRow struct {
+	Revision        string
+	ID              string
+	ProjectID       string
+	FeatureID       string
+	EndpointID      string
+	Version         int64
+	MetadataVersion int64
+	Position        int64
+	Document        json.RawMessage `gorm:"type:jsonb"`
+	Body            json.RawMessage `gorm:"type:jsonb"`
+}
 
 type attemptRecord struct {
 	Project      string `gorm:"primaryKey"`

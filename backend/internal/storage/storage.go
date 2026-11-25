@@ -24,7 +24,10 @@ var ErrConflict = errors.New("configuration changed; reload before saving")
 var ErrContext = errors.New("unknown project or environment")
 var ErrCapacity = errors.New("runtime session capacity reached; reset attempts or wait for retention cleanup")
 
-type Store struct{ DB *gorm.DB }
+type Store struct {
+	DB               *gorm.DB
+	MaxResponseBytes int64
+}
 type Log struct {
 	ID        int64           `json:"id"`
 	CreatedAt time.Time       `json:"createdAt"`
@@ -83,35 +86,6 @@ func (s *Store) Close() error {
 	return pool.Close()
 }
 
-func (s *Store) Init(ctx context.Context, schema string) error {
-	// Explicit migrations retain the existing PostgreSQL constraints and JSON types.
-	if err := s.DB.WithContext(ctx).Exec(schema).Error; err != nil {
-		return err
-	}
-	sample := Sample()
-	assignRevisions(&sample, engine.Config{})
-	document, err := json.Marshal(sample)
-	if err != nil {
-		return err
-	}
-	row := configuration{ID: true, Version: 1, Document: document}
-	return gorm.G[configuration](s.DB, clause.OnConflict{DoNothing: true}).Create(ctx, &row)
-}
-
-func (s *Store) Config(ctx context.Context) (engine.Config, error) {
-	row, err := gorm.G[configuration](s.DB).Where("id = ?", true).Take(ctx)
-	if err != nil {
-		return engine.Config{}, err
-	}
-	var c engine.Config
-	err = json.Unmarshal(row.Document, &c)
-	c.Version = row.Version
-	return c, err
-}
-
-func lockConfig(ctx context.Context, tx *gorm.DB) (configuration, error) {
-	return gorm.G[configuration](tx, clause.Locking{Strength: "UPDATE"}).Where("id = ?", true).Take(ctx)
-}
 func assignRevisions(next *engine.Config, old engine.Config) {
 	previous := indexEndpoints(old)
 	for projectIndex := range next.Projects {
@@ -160,7 +134,8 @@ func unchangedScenarioRevision(scenario engine.Scenario, responses []engine.Resp
 		current, old := scenarioWithoutLayout(scenario), scenarioWithoutLayout(oldScenario)
 		current.Revision = ""
 		old.Revision = ""
-		if reflect.DeepEqual(current, old) && reflect.DeepEqual(responses, previous.Responses) {
+		current.Version, old.Version = 0, 0
+		if reflect.DeepEqual(current, old) && sameResponses(responses, previous.Responses) {
 			return oldScenario.Revision
 		}
 	}
@@ -180,35 +155,6 @@ func scenarioWithoutLayout(scenario engine.Scenario) engine.Scenario {
 	}
 	scenario.Flow = &flow
 	return scenario
-}
-
-func (s *Store) Save(ctx context.Context, c engine.Config) (engine.Config, error) {
-	if err := engine.Validate(c); err != nil {
-		return c, err
-	}
-	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		row, err := lockConfig(ctx, tx)
-		if err != nil {
-			return err
-		}
-		if row.Version != c.Version {
-			return ErrConflict
-		}
-		var old engine.Config
-		if err = json.Unmarshal(row.Document, &old); err != nil {
-			return err
-		}
-		assignRevisions(&c, old)
-		c.Version++
-		document, err := json.Marshal(c)
-		if err != nil {
-			return err
-		}
-		_, err = gorm.G[configuration](tx).Where("id = ?", true).
-			Select("Version", "Document").Updates(ctx, configuration{Version: c.Version, Document: document})
-		return err
-	})
-	return c, err
 }
 
 func (s *Store) Match(ctx context.Context, project, environment, session string, request engine.Request) (engine.Plan, error) {
@@ -242,6 +188,13 @@ func (s *Store) Match(ctx context.Context, project, environment, session string,
 		} else {
 			plan = engine.Resolve(match, attempt)
 		}
+		if plan.Response.Body == nil {
+			var saved entityRow
+			if err := tx.Table("responses").Select("body").Where("project_id = ? AND endpoint_id = ? AND id = ?", project, match.Endpoint.ID, plan.Response.ID).Take(&saved).Error; err != nil {
+				return err
+			}
+			plan.Response.Body = saved.Body
+		}
 		if err := writeRequestLog(ctx, tx, project, environment, session, request, plan); err != nil {
 			return err
 		}
@@ -251,39 +204,78 @@ func (s *Store) Match(ctx context.Context, project, environment, session string,
 }
 
 func selectLockedMatch(ctx context.Context, tx *gorm.DB, project, environment string, request engine.Request) (engine.Match, error) {
-	row, err := lockConfig(ctx, tx)
+	if err := configurationLock(ctx, tx, false); err != nil {
+		return engine.Match{}, err
+	}
+	if err := entityLock(ctx, tx, project, false); err != nil {
+		return engine.Match{}, err
+	}
+	var row entityRow
+	if err := tx.Table("projects").Where("id = ?", project).Take(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return engine.Match{}, ErrContext
+		}
+		return engine.Match{}, err
+	}
+	var candidate engine.Project
+	if err := json.Unmarshal(row.Document, &candidate); err != nil {
+		return engine.Match{}, err
+	}
+	if !slices.Contains(candidate.Environments, environment) {
+		return engine.Match{}, ErrContext
+	}
+	var routes []struct{ ID, FeatureID string }
+	q := tx.Table("endpoints AS e").Select("e.id,e.feature_id").Joins("JOIN features f ON f.project_id=e.project_id AND f.id=e.feature_id").Where("e.project_id = ? AND e.method = ? AND e.path = ? AND (e.document->>'enabled')::boolean AND NOT COALESCE((f.document->>'mockingDisabled')::boolean,false)", project, request.Method, request.Path)
+	if request.Feature != "" {
+		q = q.Where("e.feature_id = ?", request.Feature)
+	}
+	if err := q.Find(&routes).Error; err != nil {
+		return engine.Match{}, err
+	}
+	if len(routes) > 1 {
+		return engine.Match{}, engine.ErrAmbiguousFeature
+	}
+	if len(routes) == 0 {
+		return engine.Match{}, engine.ErrNoMatch
+	}
+	scope := Scope{Project: project, Feature: routes[0].FeatureID, Endpoint: routes[0].ID}
+	if err := lockScope(ctx, tx, scope, false); err != nil {
+		return engine.Match{}, err
+	}
+	endpoint, feature, err := loadRuntimeEndpoint(ctx, tx, scope)
 	if err != nil {
 		return engine.Match{}, err
 	}
-	var config engine.Config
-	if err := json.Unmarshal(row.Document, &config); err != nil {
-		return engine.Match{}, err
+	candidate.Features = []engine.Feature{feature}
+	candidate.Features[0].Endpoints = []engine.Endpoint{endpoint}
+	return engine.Select(candidate, environment, request)
+}
+
+func sameResponses(a, b []engine.Response) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	for i := range a {
+		a[i].Version = 0
 	}
-	for _, candidate := range config.Projects {
-		if candidate.ID != project {
-			continue
-		}
-		if !slices.Contains(candidate.Environments, environment) {
-			return engine.Match{}, ErrContext
-		}
-		return engine.Select(candidate, environment, request)
+	for i := range b {
+		b[i].Version = 0
 	}
-	return engine.Match{}, ErrContext
+	return reflect.DeepEqual(a, b)
 }
 
 func checkAttemptCapacity(ctx context.Context, tx *gorm.DB, project, environment, session string, match engine.Match) error {
+	existing, err := gorm.G[attemptRecord](tx).Where("project = ? AND environment = ? AND endpoint = ? AND revision = ? AND session = ?", project, environment, match.Endpoint.ID, match.Scenario.Revision, session).Count(ctx, "*")
+	if err != nil || existing > 0 {
+		return err
+	}
+	// Only new counter keys contend on capacity. Existing sessions remain independent.
+	if err := tx.WithContext(ctx).Exec("SELECT pg_advisory_xact_lock(hashtext(current_schema()), 1297040204)").Error; err != nil {
+		return err
+	}
 	count, err := gorm.G[attemptRecord](tx).Count(ctx, "*")
 	if err != nil {
 		return err
 	}
-	if count < 10000 {
-		return nil
-	}
-	existing, err := gorm.G[attemptRecord](tx).Where("project = ? AND environment = ? AND endpoint = ? AND revision = ? AND session = ?", project, environment, match.Endpoint.ID, match.Scenario.Revision, session).Count(ctx, "*")
-	if err != nil {
-		return err
-	}
-	if existing == 0 {
+	if count >= 10000 {
 		return ErrCapacity
 	}
 	return nil
@@ -305,6 +297,10 @@ func saveFlowCursor(ctx context.Context, tx *gorm.DB, project, environment, sess
 }
 
 func writeRequestLog(ctx context.Context, tx *gorm.DB, project, environment, session string, request engine.Request, plan engine.Plan) error {
+	// Keep the global log cap exact when requests in different projects commit together.
+	if err := tx.WithContext(ctx).Exec("SELECT pg_advisory_xact_lock(hashtext(current_schema()), 1297040205)").Error; err != nil {
+		return err
+	}
 	detail, err := json.Marshal(Detail{
 		Method: request.Method, Path: request.Path, Feature: plan.Match.Feature, Endpoint: plan.Match.Endpoint.ID,
 		Scenario: plan.Match.Scenario.ID, Revision: plan.Match.Scenario.Revision,
@@ -326,7 +322,10 @@ func pruneRequestLogs(ctx context.Context, tx *gorm.DB) error {
 
 func (s *Store) Reset(ctx context.Context, project, env, session, endpoint string) error {
 	return s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if _, err := lockConfig(ctx, tx); err != nil {
+		if err := configurationLock(ctx, tx, false); err != nil {
+			return err
+		}
+		if err := entityLock(ctx, tx, project, true); err != nil {
 			return err
 		}
 		query := gorm.G[attemptRecord](tx).Where("project = ? AND environment = ?", project, env)

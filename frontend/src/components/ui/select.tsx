@@ -37,7 +37,7 @@ export function SelectField({
 
   return (
     <Select.Root
-      value={value || (emptyOptionLabel ? "__select_none__" : undefined)}
+      value={value || (emptyOptionLabel ? "__select_none__" : "")}
       onValueChange={(nextValue) =>
         onValueChange(nextValue === "__select_none__" ? "" : nextValue)
       }

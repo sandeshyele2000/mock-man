@@ -29,28 +29,35 @@ type Config struct {
 	Projects []Project `json:"projects"`
 }
 type Project struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Environments []string  `json:"environments"`
-	Features     []Feature `json:"features"`
+	MetadataVersion int64     `json:"metadataVersion,omitempty"`
+	Version         int64     `json:"version,omitempty"`
+	ID              string    `json:"id"`
+	Name            string    `json:"name"`
+	Environments    []string  `json:"environments"`
+	Features        []Feature `json:"features"`
 }
 type Feature struct {
+	MetadataVersion int64      `json:"metadataVersion,omitempty"`
+	Version         int64      `json:"version,omitempty"`
 	MockingDisabled bool       `json:"mockingDisabled,omitempty"`
 	ID              string     `json:"id"`
 	Name            string     `json:"name"`
 	Endpoints       []Endpoint `json:"endpoints"`
 }
 type Endpoint struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Method    string            `json:"method"`
-	Path      string            `json:"path"`
-	Enabled   bool              `json:"enabled"`
-	Responses []Response        `json:"responses"`
-	Scenarios []Scenario        `json:"scenarios"`
-	Active    map[string]string `json:"active"`
+	MetadataVersion int64             `json:"metadataVersion,omitempty"`
+	Version         int64             `json:"version,omitempty"`
+	ID              string            `json:"id"`
+	Name            string            `json:"name"`
+	Method          string            `json:"method"`
+	Path            string            `json:"path"`
+	Enabled         bool              `json:"enabled"`
+	Responses       []Response        `json:"responses"`
+	Scenarios       []Scenario        `json:"scenarios"`
+	Active          map[string]string `json:"active"`
 }
 type Response struct {
+	Version int64             `json:"version,omitempty"`
 	ID      string            `json:"id"`
 	Name    string            `json:"name"`
 	Status  int               `json:"status"`
@@ -84,6 +91,7 @@ type FlowConnection struct {
 	SourcePort string `json:"sourcePort,omitempty"`
 }
 type Scenario struct {
+	Version     int64       `json:"version,omitempty"`
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
 	Revision    string      `json:"revision"`

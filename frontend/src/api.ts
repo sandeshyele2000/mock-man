@@ -24,8 +24,18 @@ export async function api<T>(
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     },
   );
-  const data = await r.json();
-  if (!r.ok) throw Error(data.error || `Request failed (${r.status})`);
+  const data = await r.json().catch(() => undefined);
+  if (!r.ok)
+    throw Error(
+      data?.error ||
+        (r.status === 413
+          ? "Upload exceeds the server or proxy size limit."
+          : `Request failed (${r.status})`),
+    );
+  if (data === undefined)
+    throw Error(
+      "Server returned invalid JSON; check the API URL and proxy configuration.",
+    );
   return data;
 }
 export const loadConfig = () =>

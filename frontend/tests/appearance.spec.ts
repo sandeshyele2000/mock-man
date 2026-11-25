@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { fixture } from "./fixture";
+import { fixture, fulfillProjectMutation } from "./fixture";
 
 test("dark workspace contrast, search recovery, pause feedback and mobile controls", async ({
   page,
@@ -7,6 +7,7 @@ test("dark workspace contrast, search recovery, pause feedback and mobile contro
   let config = structuredClone(fixture);
   await page.addInitScript(() => localStorage.setItem("mockman-theme", "dark"));
   await page.route("**/api/**", async (route) => {
+    if (await fulfillProjectMutation(route, config)) return;
     const isConfig = new URL(route.request().url()).pathname === "/api/config";
     if (isConfig && route.request().method() === "PUT")
       config = {
@@ -359,6 +360,7 @@ test("sidebar alignment and large response preview support editing and deletion"
   let config = structuredClone(fixture);
   await page.addInitScript(() => localStorage.setItem("mockman-theme", "dark"));
   await page.route("**/api/**", async (route) => {
+    if (await fulfillProjectMutation(route, config)) return;
     const isConfig = new URL(route.request().url()).pathname === "/api/config";
     if (isConfig && route.request().method() === "PUT")
       config = {
@@ -474,6 +476,7 @@ test("feature drops distinguish missing files from multiple files and read file 
 }) => {
   let config = structuredClone(fixture);
   await page.route("**/api/**", async (route) => {
+    if (await fulfillProjectMutation(route, config)) return;
     const isConfig = new URL(route.request().url()).pathname === "/api/config";
     if (isConfig && route.request().method() === "PUT")
       config = {
